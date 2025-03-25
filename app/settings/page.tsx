@@ -1,248 +1,245 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
-import { Loader } from '@/components/ui/loader';
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/use-toast";
+import { Loader2, Save } from "lucide-react";
 
-const generalFormSchema = z.object({
-  pharmacyName: z.string().min(2, {
-    message: 'Pharmacy name must be at least 2 characters.',
-  }).max(50, {
-    message: 'Pharmacy name must not exceed 50 characters.',
-  }),
-  email: z.string().email({
-    message: 'Please enter a valid email address.',
-  }),
-  phone: z.string().min(10, {
-    message: 'Phone number must be at least 10 digits.',
-  }),
-  address: z.string().min(5, {
-    message: 'Address must be at least 5 characters.',
-  }),
-  currency: z.string({
-    required_error: 'Please select a currency.',
-  }),
-});
-
-const notificationFormSchema = z.object({
-  emailNotifications: z.boolean(),
-  stockAlerts: z.boolean(),
-  expiryAlerts: z.boolean(),
-  lowStockThreshold: z.string().min(1, {
-    message: 'Please enter a threshold value.',
-  }),
-});
+interface Settings {
+  general: {
+    pharmacyName: string;
+    address: string;
+    phone: string;
+    email: string;
+    timezone: string;
+    currency: string;
+  };
+  notifications: {
+    emailNotifications: boolean;
+    lowStockAlerts: boolean;
+    expiryAlerts: boolean;
+    salesAlerts: boolean;
+  };
+  security: {
+    twoFactorAuth: boolean;
+    sessionTimeout: number;
+    passwordExpiry: number;
+  };
+  backup: {
+    autoBackup: boolean;
+    backupFrequency: string;
+    backupRetention: number;
+  };
+  printing: {
+    printerName: string;
+    paperSize: string;
+    printLogo: boolean;
+  };
+  email: {
+    smtpHost: string;
+    smtpPort: number;
+    smtpUser: string;
+    smtpPass: string;
+  };
+  integrations: {
+    paymentGateway: string;
+    inventorySystem: string;
+    accountingSoftware: string;
+  };
+}
 
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const generalForm = useForm<z.infer<typeof generalFormSchema>>({
-    resolver: zodResolver(generalFormSchema),
-    defaultValues: {
-      pharmacyName: 'PharmaCare',
-      email: 'contact@pharmacare.com',
-      phone: '+1234567890',
-      address: '123 Health Street',
-      currency: 'USD',
+  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<Settings>({
+    general: {
+      pharmacyName: "PharmaCare",
+      address: "123 Pharmacy Street",
+      phone: "+1 234 567 8900",
+      email: "contact@pharmacare.com",
+      timezone: "UTC",
+      currency: "USD",
     },
-  });
-
-  const notificationForm = useForm<z.infer<typeof notificationFormSchema>>({
-    resolver: zodResolver(notificationFormSchema),
-    defaultValues: {
+    notifications: {
       emailNotifications: true,
-      stockAlerts: true,
+      lowStockAlerts: true,
       expiryAlerts: true,
-      lowStockThreshold: '20',
+      salesAlerts: false,
+    },
+    security: {
+      twoFactorAuth: false,
+      sessionTimeout: 30,
+      passwordExpiry: 90,
+    },
+    backup: {
+      autoBackup: true,
+      backupFrequency: "daily",
+      backupRetention: 30,
+    },
+    printing: {
+      printerName: "Default Printer",
+      paperSize: "A4",
+      printLogo: true,
+    },
+    email: {
+      smtpHost: "smtp.example.com",
+      smtpPort: 587,
+      smtpUser: "noreply@pharmacare.com",
+      smtpPass: "",
+    },
+    integrations: {
+      paymentGateway: "Stripe",
+      inventorySystem: "Custom",
+      accountingSoftware: "QuickBooks",
     },
   });
 
-  async function onGeneralSubmit(values: z.infer<typeof generalFormSchema>) {
+  const handleSave = async () => {
+    setLoading(true);
     try {
-      setIsLoading(true);
+      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
       toast({
-        title: 'Settings updated',
-        description: 'Your general settings have been saved successfully.',
-        duration: 3000,
+        title: "Settings saved",
+        description: "Your settings have been updated successfully.",
       });
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to update settings. Please try again.',
-        duration: 3000,
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }
-
-  async function onNotificationSubmit(
-    values: z.infer<typeof notificationFormSchema>
-  ) {
-    try {
-      setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      toast({
-        title: 'Notifications updated',
-        description: 'Your notification preferences have been saved successfully.',
-        duration: 3000,
-      });
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to update notification settings. Please try again.',
-        duration: 3000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  if (isLoading) {
-    return <Loader />;
-  }
+  };
 
   return (
-    <div className="h-full p-8 space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-        <p className="text-muted-foreground">
-          Manage your pharmacy settings and preferences
-        </p>
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">Manage your pharmacy system settings</p>
+        </div>
+        <Button onClick={handleSave} disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Changes
+            </>
+          )}
+        </Button>
       </div>
 
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="backup">Backup</TabsTrigger>
+          <TabsTrigger value="printing">Printing</TabsTrigger>
+          <TabsTrigger value="email">Email</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
           <Card>
             <CardHeader>
               <CardTitle>General Settings</CardTitle>
+              <CardDescription>Configure your pharmacy's basic information</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Form {...generalForm}>
-                <form
-                  onSubmit={generalForm.handleSubmit(onGeneralSubmit)}
-                  className="space-y-8"
-                >
-                  <FormField
-                    control={generalForm.control}
-                    name="pharmacyName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Pharmacy Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pharmacyName">Pharmacy Name</Label>
+                  <Input
+                    id="pharmacyName"
+                    value={settings.general.pharmacyName}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        general: { ...settings.general, pharmacyName: e.target.value },
+                      })
+                    }
                   />
-
-                  <FormField
-                    control={generalForm.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="email" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Input
+                    id="address"
+                    value={settings.general.address}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        general: { ...settings.general, address: e.target.value },
+                      })
+                    }
                   />
-
-                  <FormField
-                    control={generalForm.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={settings.general.phone}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        general: { ...settings.general, phone: e.target.value },
+                      })
+                    }
                   />
-
-                  <FormField
-                    control={generalForm.control}
-                    name="address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Address</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={settings.general.email}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        general: { ...settings.general, email: e.target.value },
+                      })
+                    }
                   />
-
-                  <FormField
-                    control={generalForm.control}
-                    name="currency"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Currency</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select currency" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="USD">USD ($)</SelectItem>
-                            <SelectItem value="EUR">EUR (€)</SelectItem>
-                            <SelectItem value="GBP">GBP (£)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="timezone">Timezone</Label>
+                  <Input
+                    id="timezone"
+                    value={settings.general.timezone}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        general: { ...settings.general, timezone: e.target.value },
+                      })
+                    }
                   />
-
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Saving...' : 'Save changes'}
-                  </Button>
-                </form>
-              </Form>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Input
+                    id="currency"
+                    value={settings.general.currency}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        general: { ...settings.general, currency: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -251,108 +248,417 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Settings</CardTitle>
+              <CardDescription>Configure your notification preferences</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Form {...notificationForm}>
-                <form
-                  onSubmit={notificationForm.handleSubmit(onNotificationSubmit)}
-                  className="space-y-8"
-                >
-                  <FormField
-                    control={notificationForm.control}
-                    name="emailNotifications"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">
-                            Email Notifications
-                          </FormLabel>
-                          <FormDescription>
-                            Receive notifications via email
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Email Notifications</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Receive notifications via email
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.notifications.emailNotifications}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      notifications: {
+                        ...settings.notifications,
+                        emailNotifications: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Low Stock Alerts</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get notified when inventory is running low
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.notifications.lowStockAlerts}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      notifications: {
+                        ...settings.notifications,
+                        lowStockAlerts: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Expiry Alerts</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get notified when products are about to expire
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.notifications.expiryAlerts}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      notifications: {
+                        ...settings.notifications,
+                        expiryAlerts: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Sales Alerts</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get notified about daily sales reports
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.notifications.salesAlerts}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      notifications: {
+                        ...settings.notifications,
+                        salesAlerts: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                  <FormField
-                    control={notificationForm.control}
-                    name="stockAlerts"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">
-                            Stock Alerts
-                          </FormLabel>
-                          <FormDescription>
-                            Get alerts for low stock items
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+        <TabsContent value="security">
+          <Card>
+            <CardHeader>
+              <CardTitle>Security Settings</CardTitle>
+              <CardDescription>Configure your security preferences</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Two-Factor Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable two-factor authentication for additional security
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.security.twoFactorAuth}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      security: {
+                        ...settings.security,
+                        twoFactorAuth: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sessionTimeout">Session Timeout (minutes)</Label>
+                <Input
+                  id="sessionTimeout"
+                  type="number"
+                  value={settings.security.sessionTimeout}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      security: {
+                        ...settings.security,
+                        sessionTimeout: parseInt(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="passwordExpiry">Password Expiry (days)</Label>
+                <Input
+                  id="passwordExpiry"
+                  type="number"
+                  value={settings.security.passwordExpiry}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      security: {
+                        ...settings.security,
+                        passwordExpiry: parseInt(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                  <FormField
-                    control={notificationForm.control}
-                    name="expiryAlerts"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">
-                            Expiry Alerts
-                          </FormLabel>
-                          <FormDescription>
-                            Get alerts for items near expiry
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+        <TabsContent value="backup">
+          <Card>
+            <CardHeader>
+              <CardTitle>Backup Settings</CardTitle>
+              <CardDescription>Configure your backup preferences</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Automatic Backup</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable automatic system backups
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.backup.autoBackup}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      backup: {
+                        ...settings.backup,
+                        autoBackup: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="backupFrequency">Backup Frequency</Label>
+                <Input
+                  id="backupFrequency"
+                  value={settings.backup.backupFrequency}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      backup: {
+                        ...settings.backup,
+                        backupFrequency: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="backupRetention">Backup Retention (days)</Label>
+                <Input
+                  id="backupRetention"
+                  type="number"
+                  value={settings.backup.backupRetention}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      backup: {
+                        ...settings.backup,
+                        backupRetention: parseInt(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                  <FormField
-                    control={notificationForm.control}
-                    name="lowStockThreshold"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Low Stock Threshold</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(e.target.value)}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Set the minimum stock level for alerts
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+        <TabsContent value="printing">
+          <Card>
+            <CardHeader>
+              <CardTitle>Printing Settings</CardTitle>
+              <CardDescription>Configure your printing preferences</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="printerName">Printer Name</Label>
+                <Input
+                  id="printerName"
+                  value={settings.printing.printerName}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      printing: {
+                        ...settings.printing,
+                        printerName: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paperSize">Paper Size</Label>
+                <Input
+                  id="paperSize"
+                  value={settings.printing.paperSize}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      printing: {
+                        ...settings.printing,
+                        paperSize: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Print Logo</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Include pharmacy logo on printed documents
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.printing.printLogo}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      printing: {
+                        ...settings.printing,
+                        printLogo: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Saving...' : 'Save changes'}
-                  </Button>
-                </form>
-              </Form>
+        <TabsContent value="email">
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Settings</CardTitle>
+              <CardDescription>Configure your email server settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="smtpHost">SMTP Host</Label>
+                <Input
+                  id="smtpHost"
+                  value={settings.email.smtpHost}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      email: {
+                        ...settings.email,
+                        smtpHost: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="smtpPort">SMTP Port</Label>
+                <Input
+                  id="smtpPort"
+                  type="number"
+                  value={settings.email.smtpPort}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      email: {
+                        ...settings.email,
+                        smtpPort: parseInt(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="smtpUser">SMTP Username</Label>
+                <Input
+                  id="smtpUser"
+                  value={settings.email.smtpUser}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      email: {
+                        ...settings.email,
+                        smtpUser: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="smtpPass">SMTP Password</Label>
+                <Input
+                  id="smtpPass"
+                  type="password"
+                  value={settings.email.smtpPass}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      email: {
+                        ...settings.email,
+                        smtpPass: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="integrations">
+          <Card>
+            <CardHeader>
+              <CardTitle>Integration Settings</CardTitle>
+              <CardDescription>Configure your third-party integrations</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentGateway">Payment Gateway</Label>
+                <Input
+                  id="paymentGateway"
+                  value={settings.integrations.paymentGateway}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      integrations: {
+                        ...settings.integrations,
+                        paymentGateway: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inventorySystem">Inventory System</Label>
+                <Input
+                  id="inventorySystem"
+                  value={settings.integrations.inventorySystem}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      integrations: {
+                        ...settings.integrations,
+                        inventorySystem: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="accountingSoftware">Accounting Software</Label>
+                <Input
+                  id="accountingSoftware"
+                  value={settings.integrations.accountingSoftware}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      integrations: {
+                        ...settings.integrations,
+                        accountingSoftware: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

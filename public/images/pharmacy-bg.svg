@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#2563EB"/>
+  
+  <!-- Abstract Pattern -->
+  <g opacity="0.1">
+    <!-- Circles -->
+    <circle cx="960" cy="540" r="400" stroke="white" stroke-width="2"/>
+    <circle cx="960" cy="540" r="300" stroke="white" stroke-width="2"/>
+    <circle cx="960" cy="540" r="200" stroke="white" stroke-width="2"/>
+    
+    <!-- Lines -->
+    <line x1="960" y1="140" x2="960" y2="940" stroke="white" stroke-width="2"/>
+    <line x1="560" y1="540" x2="1360" y2="540" stroke="white" stroke-width="2"/>
+    
+    <!-- Diagonal Lines -->
+    <line x1="560" y1="140" x2="1360" y2="940" stroke="white" stroke-width="2"/>
+    <line x1="1360" y1="140" x2="560" y2="940" stroke="white" stroke-width="2"/>
+  </g>
+  
+  <!-- Decorative Elements -->
+  <g opacity="0.05">
+    <!-- Medical Icons -->
+    <path d="M400 300L440 300L440 340L480 340L480 380L440 380L440 420L400 420L400 380L360 380L360 340L400 340L400 300Z" fill="white"/>
+    <path d="M1520 300L1560 300L1560 340L1600 340L1600 380L1560 380L1560 420L1520 420L1520 380L1480 380L1480 340L1520 340L1520 300Z" fill="white"/>
+    <path d="M400 780L440 780L440 820L480 820L480 860L440 860L440 900L400 900L400 860L360 860L360 820L400 820L400 780Z" fill="white"/>
+    <path d="M1520 780L1560 780L1560 820L1600 820L1600 860L1560 860L1560 900L1520 900L1520 860L1480 860L1480 820L1520 820L1520 780Z" fill="white"/>
+  </g>
+</svg> 
