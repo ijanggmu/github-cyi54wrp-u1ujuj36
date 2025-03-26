@@ -660,37 +660,26 @@ export default function POSPage() {
                       </span>
                     </div>
                     <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Total Amount</span>
-                      <div className="text-right">
-                        <div className="text-2xl font-semibold">${total.toFixed(2)}</div>
-                        {globalDiscount > 0 && (
-                          <div className="text-xs text-muted-foreground">
-                            You save ${discountAmount.toFixed(2)}
-                          </div>
-                        )}
-                      </div>
+                    <div className="flex justify-between items-center text-sm font-medium">
+                      <span>Total Amount:</span>
+                      <span className="text-2xl font-bold text-primary">
+                        ${total.toFixed(2)}
+                      </span>
                     </div>
                   </div>
                   <Button
-                    className="w-full h-14 text-lg bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary transition-all duration-300"
-                    onClick={() => {
-                      if (!selectedCustomer) {
-                        setShowCustomerDialog(true);
-                      } else {
-                        setShowPaymentDialog(true);
-                      }
-                    }}
-                    disabled={loading || cartItems.length === 0}
+                    className="w-full h-12 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 text-base font-semibold"
+                    onClick={handlePayment}
+                    disabled={cartItems.length === 0 || loading}
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        <Loader2 className="h-5 w-5 animate-spin" />
                         Processing...
                       </>
                     ) : (
                       <>
-                        <CreditCard className="mr-2 h-5 w-5" />
+                        <CreditCard className="h-5 w-5" />
                         Pay ${total.toFixed(2)}
                       </>
                     )}
