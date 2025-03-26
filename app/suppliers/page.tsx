@@ -84,7 +84,7 @@ export default function SuppliersPage() {
     email: '',
     address: '',
     contactPerson: '',
-    status: 'active',
+      status: 'active',
   });
 
   const filteredSuppliers = suppliers.filter((supplier) =>
