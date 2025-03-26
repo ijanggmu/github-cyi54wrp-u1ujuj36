@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-store';
+import { NotificationDropdown } from '@/components/notification-dropdown';
 
 export function Navbar() {
   const router = useRouter();
@@ -26,9 +27,7 @@ export function Navbar() {
     <div className="border-b">
       <div className="flex h-16 items-center px-4">
         <div className="ml-auto flex items-center space-x-4">
-          <Button variant="ghost" size="icon">
-            <Bell className="h-5 w-5" />
-          </Button>
+          <NotificationDropdown />
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
