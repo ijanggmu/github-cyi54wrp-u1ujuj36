@@ -1,235 +1,318 @@
-# Pharmacy Management System (PMS)
+# PMS (Point of Sale System)
 
-A modern, full-featured pharmacy management system built with Next.js, TypeScript, and Tailwind CSS.
+A modern, type-safe Point of Sale System built with Next.js, TypeScript, and React Query.
 
-## Features
-
-- **Authentication & Authorization**
-  - Secure login system
-  - Role-based access control
-  - Session management
-  - Two-factor authentication
-
-- **Dashboard**
-  - Real-time statistics
-  - Sales analytics
-  - Inventory status
-  - Recent activities
-
-- **Inventory Management**
-  - Stock tracking
-  - Low stock alerts
-  - Expiry date monitoring
-  - Batch management
-  - Supplier management
-
-- **Sales & Billing**
-  - Point of sale (POS) system
-  - Multiple payment methods
-  - Receipt generation
-  - Sales history
-  - Customer management
-
-- **Reports & Analytics**
-  - Sales reports
-  - Inventory reports
-  - Financial reports
-  - Custom report generation
-  - Export functionality
-
-- **User Management**
-  - User profiles
-  - Role management
-  - Permission system
-  - Activity logging
-
-- **Notifications**
-  - Real-time alerts
-  - Email notifications
-  - System updates
-  - Custom notification preferences
-
-## Tech Stack
-
-- **Frontend**
-  - Next.js 14 (App Router)
-  - TypeScript
-  - Tailwind CSS
-  - Shadcn/ui components
-  - Lucide icons
-  - React Hook Form
-  - Zod validation
-
-- **Backend**
-  - Next.js API routes
-  - Prisma ORM
-  - PostgreSQL database
-  - JWT authentication
-
-- **Development Tools**
-  - ESLint
-  - Prettier
-  - TypeScript
-  - Git
+## Table of Contents
+1. [Project Structure](#project-structure)
+2. [State Management](#state-management)
+3. [API Layer](#api-layer)
+4. [Type System](#type-system)
+5. [React Query Integration](#react-query-integration)
+6. [Best Practices](#best-practices)
+7. [Code Organization](#code-organization)
+8. [Error Handling](#error-handling)
+9. [Performance Optimization](#performance-optimization)
+10. [Getting Started](#getting-started)
 
 ## Project Structure
 
 ```
+pms/
 ├── app/
-│   ├── (auth)/
-│   │   ├── login/
-│   │   └── register/
-│   ├── (dashboard)/
-│   │   ├── dashboard/
-│   │   ├── inventory/
-│   │   ├── sales/
-│   │   ├── reports/
-│   │   ├── users/
-│   │   ├── roles/
-│   │   ├── settings/
-│   │   └── notifications/
-│   ├── api/
-│   └── layout.tsx
-├── components/
-│   ├── ui/
-│   ├── forms/
-│   ├── layout/
-│   └── shared/
+│   ├── features/           # Feature-based modules
+│   │   ├── auth/          # Authentication feature
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── types/
+│   │   │   └── utils/
+│   │   └── dashboard/     # Dashboard feature
+│   │       ├── components/
+│   │       ├── hooks/
+│   │       ├── types/
+│   │       └── utils/
+│   └── layout.tsx         # Root layout
 ├── lib/
-│   ├── utils.ts
-│   └── validations.ts
-├── prisma/
-│   └── schema.prisma
-├── public/
-│   └── images/
-└── styles/
-    └── globals.css
+│   ├── api/              # API related code
+│   ├── store/            # Global state management
+│   ├── query/            # React Query configuration
+│   └── types/            # Shared types
+└── components/           # Shared components
+```
+
+## State Management
+
+### Zustand Store
+The project uses Zustand for global state management with persistence and devtools.
+
+```typescript
+// Example usage in a component
+import { useAppStore } from '@/lib/store';
+
+function ThemeToggle() {
+  const { theme, setTheme } = useAppStore();
+
+  return (
+    <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+      Toggle Theme
+    </button>
+  );
+}
+```
+
+Best Practices:
+- Keep store slices small and focused
+- Use TypeScript interfaces for state types
+- Implement proper error handling in actions
+- Use middleware (persist, devtools) for better debugging
+
+## API Layer
+
+### API Client
+The project uses a type-safe API client built with Axios.
+
+```typescript
+// Example usage in a component
+import { apiClient } from '@/lib/api/client';
+
+// GET request
+const getUsers = async () => {
+  const response = await apiClient.get<User[]>('/users');
+  return response.data;
+};
+
+// POST request
+const createUser = async (userData: CreateUserDTO) => {
+  const response = await apiClient.post<User>('/users', userData);
+  return response.data;
+};
+```
+
+Best Practices:
+- Always type your API responses
+- Use proper error handling
+- Implement request/response interceptors
+- Keep API calls in service files
+
+## Type System
+
+### Shared Types
+The project uses TypeScript with strict type checking.
+
+```typescript
+// Example of using shared types
+import { User, ApiResponse, PaginatedResponse } from '@/lib/types';
+
+interface UserListProps {
+  users: User[];
+  pagination: PaginatedResponse<User>['pagination'];
+}
+```
+
+Best Practices:
+- Use interfaces for object types
+- Use type aliases for union types
+- Keep types DRY (Don't Repeat Yourself)
+- Use proper type guards
+
+## React Query Integration
+
+### Query Client Configuration
+```typescript
+// Example usage in a component
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api/client';
+
+function UserList() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => apiClient.get<User[]>('/users'),
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: (userData: CreateUserDTO) => 
+      apiClient.post<User>('/users', userData),
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+```
+
+Best Practices:
+- Use proper query keys
+- Implement proper error handling
+- Use optimistic updates when appropriate
+- Implement proper loading states
+
+## Best Practices
+
+### Component Structure
+```typescript
+// Example of a well-structured component
+import { FC } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api/client';
+import { User } from '@/lib/types';
+
+interface UserListProps {
+  limit?: number;
+}
+
+export const UserList: FC<UserListProps> = ({ limit = 10 }) => {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['users', limit],
+    queryFn: () => apiClient.get<User[]>(`/users?limit=${limit}`),
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return (
+    <div>
+      {data?.map(user => (
+        <UserCard key={user.id} user={user} />
+      ))}
+    </div>
+  );
+};
+```
+
+### Error Handling
+```typescript
+// Example of proper error handling
+import { ErrorBoundary } from 'react-error-boundary';
+
+function ErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <div role="alert">
+      <p>Something went wrong:</p>
+      <pre>{error.message}</pre>
+      <button onClick={resetErrorBoundary}>Try again</button>
+    </div>
+  );
+}
+
+// Usage
+<ErrorBoundary FallbackComponent={ErrorFallback}>
+  <UserList />
+</ErrorBoundary>
+```
+
+## Code Organization
+
+### Feature-Based Structure
+Each feature should follow this structure:
+```
+feature/
+├── components/     # Feature-specific components
+├── hooks/         # Custom hooks
+├── types/         # Feature-specific types
+└── utils/         # Utility functions
+```
+
+### Naming Conventions
+- Components: PascalCase (e.g., `UserList.tsx`)
+- Hooks: camelCase with 'use' prefix (e.g., `useUserData.ts`)
+- Types: PascalCase (e.g., `UserTypes.ts`)
+- Utils: camelCase (e.g., `formatDate.ts`)
+
+## Performance Optimization
+
+### React Query Best Practices
+```typescript
+// Example of optimized query configuration
+const { data } = useQuery({
+  queryKey: ['users'],
+  queryFn: () => apiClient.get<User[]>('/users'),
+  staleTime: 5 * 60 * 1000, // 5 minutes
+  cacheTime: 30 * 60 * 1000, // 30 minutes
+  refetchOnWindowFocus: false,
+});
+```
+
+### Component Optimization
+```typescript
+// Example of memoized component
+import { memo } from 'react';
+
+export const UserCard = memo(function UserCard({ user }: UserCardProps) {
+  return (
+    <div>
+      <h3>{user.name}</h3>
+      <p>{user.email}</p>
+    </div>
+  );
+});
 ```
 
 ## Getting Started
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/pharmacy-management-system.git
-   ```
+```bash
+git clone [repository-url]
+```
 
 2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env.local
-   ```
+3. Create a `.env.local` file:
+```env
+NEXT_PUBLIC_API_URL=http://your-api-url
+```
 
-4. Set up the database:
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   ```
+4. Run the development server:
+```bash
+npm run dev
+```
 
-5. Run the development server:
-   ```bash
-   npm run dev
-   ```
+5. Build for production:
+```bash
+npm run build
+```
 
-## Best Practices
+6. Start the production server:
+```bash
+npm run start
+```
 
-### Code Organization
+## Development Guidelines
 
-1. **Component Structure**
-   - Use functional components with TypeScript
-   - Keep components small and focused
-   - Use proper naming conventions (PascalCase for components)
-   - Implement proper prop types and interfaces
+1. **Type Safety**
+   - Always use TypeScript types
+   - Avoid using `any`
+   - Use proper type guards
 
-2. **File Organization**
-   - Group related components in feature folders
-   - Keep shared components in the components directory
-   - Use index files for cleaner imports
-   - Follow consistent file naming conventions
+2. **State Management**
+   - Use Zustand for global state
+   - Use React Query for server state
+   - Use local state for component-specific state
 
-3. **State Management**
-   - Use React hooks for local state
-   - Implement proper loading states
-   - Handle errors gracefully
-   - Use proper TypeScript types
-
-### UI/UX Guidelines
-
-1. **Design System**
-   - Follow the established color palette
-   - Use consistent spacing and typography
-   - Implement responsive design
-   - Follow accessibility guidelines
-
-2. **Component Usage**
-   - Use shadcn/ui components consistently
-   - Implement proper loading states
-   - Add proper error handling
-   - Include proper feedback for user actions
-
-3. **Forms**
-   - Use React Hook Form for form management
-   - Implement Zod validation
-   - Show proper validation messages
-   - Handle form submission states
-
-### Performance
-
-1. **Optimization**
-   - Use proper image optimization
-   - Implement code splitting
-   - Use proper caching strategies
-   - Optimize bundle size
-
-2. **Loading States**
-   - Implement skeleton loading
-   - Use proper loading indicators
-   - Handle error states gracefully
-   - Implement proper fallbacks
-
-### Security
-
-1. **Authentication**
-   - Implement proper JWT handling
-   - Use secure session management
-   - Implement proper password hashing
-   - Use HTTPS
-
-2. **Authorization**
-   - Implement role-based access control
-   - Validate user permissions
-   - Protect sensitive routes
+3. **API Calls**
+   - Use the API client for all HTTP requests
    - Implement proper error handling
+   - Use React Query for data fetching
 
-### Testing
+4. **Component Structure**
+   - Keep components small and focused
+   - Use proper prop types
+   - Implement proper error boundaries
 
-1. **Unit Tests**
-   - Write tests for components
-   - Test utility functions
-   - Test API endpoints
-   - Use proper test coverage
+5. **Code Quality**
+   - Follow ESLint rules
+   - Write meaningful comments
+   - Keep code DRY
 
-2. **Integration Tests**
-   - Test user flows
-   - Test API integration
-   - Test form submissions
-   - Test error scenarios
+6. **Testing**
+   - Write unit tests for components
+   - Write integration tests for features
+   - Use proper test utilities
 
-## Contributing
+## Additional Resources
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support, email support@pharmacare.com or join our Slack channel.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [React Query Documentation](https://tanstack.com/query/latest)
+- [Zustand Documentation](https://github.com/pmndrs/zustand)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)

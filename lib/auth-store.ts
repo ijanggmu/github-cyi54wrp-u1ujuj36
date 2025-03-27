@@ -19,49 +19,106 @@ export interface User {
 interface AuthStore {
   user: User | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
+  checkAuth: () => boolean;
 }
 
-// Static credentials for demo
-const VALID_CREDENTIALS = {
-  admin: { username: 'admin', password: 'admin123', role: 'admin' as const },
-  manager: { username: 'manager', password: 'manager123', role: 'manager' as const },
-  user: { username: 'user', password: 'user123', role: 'user' as const },
-};
+// Mock API response type
+interface MockApiResponse {
+  success: boolean;
+  data?: User;
+  error?: string;
+}
 
-export const useAuth = create<AuthStore>()(
-  persist(
-    (set) => ({
-      user: null,
-      isAuthenticated: false,
-      login: async (username: string, password: string) => {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+// Mock API function
+const mockApi = {
+  login: async (username: string, password: string): Promise<MockApiResponse> => {
+    // Simulate API delay
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        const validUser = Object.values(VALID_CREDENTIALS).find(
-          (cred) => cred.username === username && cred.password === password
-        );
-
-        if (!validUser) {
-          throw new Error('Invalid credentials');
-        }
-
-        const user: User = {
-          id: crypto.randomUUID(),
-          username: validUser.username,
-          role: validUser.role,
-          email: `${validUser.username}@example.com`,
-          name: validUser.username.charAt(0).toUpperCase() + validUser.username.slice(1),
+    // Mock validation
+    if (username === 'admin' && password === 'admin123') {
+      return {
+        success: true,
+        data: {
+          id: '1',
+          username: 'admin',
+          role: 'admin',
+          email: 'admin@example.com',
+          name: 'Admin User',
           preferences: {
             theme: 'system',
             language: 'en',
             notifications: true,
           },
-        };
+        },
+      };
+    }
 
-        set({ user, isAuthenticated: true });
+    if (username === 'manager' && password === 'manager123') {
+      return {
+        success: true,
+        data: {
+          id: '2',
+          username: 'manager',
+          role: 'manager',
+          email: 'manager@example.com',
+          name: 'Manager User',
+          preferences: {
+            theme: 'system',
+            language: 'en',
+            notifications: true,
+          },
+        },
+      };
+    }
+
+    if (username === 'user' && password === 'user123') {
+      return {
+        success: true,
+        data: {
+          id: '3',
+          username: 'user',
+          role: 'user',
+          email: 'user@example.com',
+          name: 'Regular User',
+          preferences: {
+            theme: 'system',
+            language: 'en',
+            notifications: true,
+          },
+        },
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Invalid credentials',
+    };
+  },
+};
+
+export const useAuth = create<AuthStore>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      isAuthenticated: false,
+      login: async (username: string, password: string) => {
+        try {
+          const response = await mockApi.login(username, password);
+          
+          if (response.success && response.data) {
+            set({ user: response.data, isAuthenticated: true });
+            return true;
+          } else {
+            throw new Error(response.error || 'Login failed');
+          }
+        } catch (error) {
+          set({ user: null, isAuthenticated: false });
+          throw error;
+        }
       },
       logout: () => {
         set({ user: null, isAuthenticated: false });
@@ -71,9 +128,13 @@ export const useAuth = create<AuthStore>()(
           user: state.user ? { ...state.user, ...updates } : null,
         }));
       },
+      checkAuth: () => {
+        return get().isAuthenticated;
+      },
     }),
     {
       name: 'auth-storage',
+      skipHydration: true,
     }
   )
 );
