@@ -122,7 +122,7 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
-        <div>
+      <div>
           <h1 className="text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground">Manage your pharmacy system settings</p>
         </div>
@@ -252,10 +252,10 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
+                        <div className="space-y-0.5">
                   <Label>Email Notifications</Label>
                   <p className="text-sm text-muted-foreground">
-                    Receive notifications via email
+                            Receive notifications via email
                   </p>
                 </div>
                 <Switch
@@ -297,8 +297,8 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">
                     Get notified when products are about to expire
                   </p>
-                </div>
-                <Switch
+                        </div>
+                          <Switch
                   checked={settings.notifications.expiryAlerts}
                   onCheckedChange={(checked) =>
                     setSettings({
@@ -343,13 +343,13 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
+                        <div className="space-y-0.5">
                   <Label>Two-Factor Authentication</Label>
                   <p className="text-sm text-muted-foreground">
                     Enable two-factor authentication for additional security
                   </p>
-                </div>
-                <Switch
+                        </div>
+                          <Switch
                   checked={settings.security.twoFactorAuth}
                   onCheckedChange={(checked) =>
                     setSettings({
@@ -408,13 +408,13 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
+                        <div className="space-y-0.5">
                   <Label>Automatic Backup</Label>
                   <p className="text-sm text-muted-foreground">
                     Enable automatic system backups
                   </p>
-                </div>
-                <Switch
+                        </div>
+                          <Switch
                   checked={settings.backup.autoBackup}
                   onCheckedChange={(checked) =>
                     setSettings({
@@ -552,9 +552,9 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="smtpPort">SMTP Port</Label>
-                <Input
+                          <Input
                   id="smtpPort"
-                  type="number"
+                            type="number"
                   value={settings.email.smtpPort}
                   onChange={(e) =>
                     setSettings({
