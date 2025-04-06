@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,15 +30,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  createdAt: string;
-  updatedAt: string;
-}
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Loader } from '@/components/ui/loader';
+import { getRoles, createRole, updateRole, deleteRole, getPermissions, Role } from '@/lib/db/users';
 
 const defaultPermissions = [
   'View Dashboard',
@@ -55,140 +56,130 @@ const defaultPermissions = [
 
 export default function RolesPage() {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roles, setRoles] = useState<Role[]>([
-    {
-      id: '1',
-      name: 'Admin',
-      description: 'Full system access with all permissions',
-      permissions: defaultPermissions,
-      createdAt: '2024-03-25T10:00:00',
-      updatedAt: '2024-03-25T10:00:00',
-    },
-    {
-      id: '2',
-      name: 'Manager',
-      description: 'Manage inventory and sales operations',
-      permissions: [
-        'View Dashboard',
-        'Manage Inventory',
-        'Manage Sales',
-        'View Analytics',
-        'Export Data',
-      ],
-      createdAt: '2024-03-25T10:00:00',
-      updatedAt: '2024-03-25T10:00:00',
-    },
-    {
-      id: '3',
-      name: 'User',
-      description: 'Basic access for daily operations',
-      permissions: [
-        'View Dashboard',
-        'Manage Inventory',
-        'Manage Sales',
-      ],
-      createdAt: '2024-03-25T10:00:00',
-      updatedAt: '2024-03-25T10:00:00',
-    },
-  ]);
-
+  const [loading, setLoading] = useState(true);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [newRole, setNewRole] = useState<Partial<Role>>({
+  const [newRole, setNewRole] = useState({
     name: '',
     description: '',
-    permissions: [],
+    permissions: [] as string[],
   });
 
-  const filteredRoles = roles.filter(role =>
-    role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    role.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleCreateRole = async () => {
+  const loadData = async () => {
+    setLoading(true);
     try {
-      setIsLoading(true);
-      // TODO: Implement API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const newRoleData: Role = {
-        id: (roles.length + 1).toString(),
-        name: newRole.name!,
-        description: newRole.description!,
-        permissions: newRole.permissions!,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setRoles([...roles, newRoleData]);
-      setIsCreateDialogOpen(false);
-      setNewRole({ name: '', description: '', permissions: [] });
-      toast({
-        title: 'Role created successfully',
-        description: 'The new role has been created and added to the system.',
-      });
+      const [rolesData, permissionsData] = await Promise.all([
+        getRoles(),
+        getPermissions(),
+      ]);
+      setRoles(rolesData);
+      setPermissions(permissionsData);
     } catch (error) {
       toast({
-        variant: 'destructive',
         title: 'Error',
-        description: 'Failed to create role. Please try again.',
+        description: 'Failed to load roles and permissions. Please try again.',
+        variant: 'destructive',
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleUpdateRole = async () => {
+  const handleAddRole = async () => {
+    setLoading(true);
     try {
-      setIsLoading(true);
-      // TODO: Implement API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setRoles(roles.map(role =>
-        role.id === selectedRole?.id
-          ? { ...role, ...selectedRole, updatedAt: new Date().toISOString() }
-          : role
-      ));
-      setIsEditDialogOpen(false);
-      setSelectedRole(null);
+      await createRole(newRole);
+      await loadData();
+      setShowAddDialog(false);
+      setNewRole({
+        name: '',
+        description: '',
+        permissions: [],
+      });
+      
       toast({
-        title: 'Role updated successfully',
-        description: 'The role has been updated with the new information.',
+        title: 'Role added',
+        description: 'New role has been added successfully.',
       });
     } catch (error) {
       toast({
+        title: 'Error',
+        description: 'Failed to add role. Please try again.',
         variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditRole = async () => {
+    if (!selectedRole) return;
+
+    setLoading(true);
+    try {
+      await updateRole(selectedRole.id, {
+        name: newRole.name,
+        description: newRole.description,
+        permissions: newRole.permissions,
+      });
+      await loadData();
+      setShowEditDialog(false);
+      
+      toast({
+        title: 'Role updated',
+        description: 'Role has been updated successfully.',
+      });
+    } catch (error) {
+      toast({
         title: 'Error',
         description: 'Failed to update role. Please try again.',
+        variant: 'destructive',
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleDeleteRole = async () => {
+  const handleDeleteRole = async (id: string) => {
+    setLoading(true);
     try {
-      setIsLoading(true);
-      // TODO: Implement API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setRoles(roles.filter(role => role.id !== selectedRole?.id));
-      setIsDeleteDialogOpen(false);
-      setSelectedRole(null);
+      await deleteRole(id);
+      await loadData();
+      
       toast({
-        title: 'Role deleted successfully',
-        description: 'The role has been removed from the system.',
+        title: 'Role deleted',
+        description: 'Role has been deleted successfully.',
       });
     } catch (error) {
       toast({
-        variant: 'destructive',
         title: 'Error',
         description: 'Failed to delete role. Please try again.',
+        variant: 'destructive',
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
+
+  const togglePermission = (permission: string) => {
+    setNewRole((prev) => ({
+      ...prev,
+      permissions: prev.permissions.includes(permission)
+        ? prev.permissions.filter((p) => p !== permission)
+        : [...prev.permissions, permission],
+    }));
+  };
+
+  if (loading) {
+    return <Loader text="Loading roles..." />;
+  }
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -199,16 +190,16 @@ export default function RolesPage() {
             Manage user roles and permissions
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Create Role
+              Add Role
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Role</DialogTitle>
+              <DialogTitle>Add New Role</DialogTitle>
               <DialogDescription>
                 Add a new role to the system with specific permissions.
               </DialogDescription>
@@ -260,19 +251,19 @@ export default function RolesPage() {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-                disabled={isLoading}
+                onClick={() => setShowAddDialog(false)}
+                disabled={loading}
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateRole} disabled={isLoading}>
-                {isLoading ? (
+              <Button onClick={handleAddRole} disabled={loading}>
+                {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    Adding...
                   </>
                 ) : (
-                  'Create Role'
+                  'Add Role'
                 )}
               </Button>
             </DialogFooter>
@@ -290,8 +281,8 @@ export default function RolesPage() {
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search roles..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={newRole.name}
+                onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
                 className="pl-8"
               />
             </div>
@@ -299,30 +290,27 @@ export default function RolesPage() {
 
           <div className="rounded-md border">
             <div className="relative w-full overflow-auto">
-              <table className="w-full caption-bottom text-sm">
-                <thead className="[&_tr]:border-b">
-                  <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                    <th className="h-12 px-4 text-left align-middle font-medium">Name</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium">Description</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium">Permissions</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium">Last Updated</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="[&_tr:last-child]:border-0">
-                  {filteredRoles.map((role) => (
-                    <tr
-                      key={role.id}
-                      className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                    >
-                      <td className="p-4 align-middle font-medium">
+              <Table className="w-full caption-bottom text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="h-12 px-4 text-left align-middle font-medium">Name</TableHead>
+                    <TableHead className="h-12 px-4 text-left align-middle font-medium">Description</TableHead>
+                    <TableHead className="h-12 px-4 text-left align-middle font-medium">Permissions</TableHead>
+                    <TableHead className="h-12 px-4 text-left align-middle font-medium">Created At</TableHead>
+                    <TableHead className="h-12 px-4 text-left align-middle font-medium">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {roles.map((role) => (
+                    <TableRow key={role.id}>
+                      <TableCell className="p-4 align-middle font-medium">
                         <div className="flex items-center space-x-2">
                           <Shield className="h-4 w-4 text-muted-foreground" />
                           <span>{role.name}</span>
                         </div>
-                      </td>
-                      <td className="p-4 align-middle">{role.description}</td>
-                      <td className="p-4 align-middle">
+                      </TableCell>
+                      <TableCell className="p-4 align-middle">{role.description}</TableCell>
+                      <TableCell className="p-4 align-middle">
                         <div className="flex flex-wrap gap-1">
                           {role.permissions.map((permission) => (
                             <span
@@ -333,18 +321,25 @@ export default function RolesPage() {
                             </span>
                           ))}
                         </div>
-                      </td>
-                      <td className="p-4 align-middle">
-                        {new Date(role.updatedAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 align-middle">
+                      </TableCell>
+                      <TableCell className="p-4 align-middle">
+                        {new Date(role.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="p-4 align-middle">
                         <div className="flex items-center space-x-2">
-                          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                          <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
                             <DialogTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSelectedRole(role)}
+                                onClick={() => {
+                                  setSelectedRole(role);
+                                  setNewRole({
+                                    name: role.name,
+                                    description: role.description,
+                                    permissions: role.permissions,
+                                  });
+                                }}
                               >
                                 <Edit2 className="h-4 w-4" />
                               </Button>
@@ -361,9 +356,12 @@ export default function RolesPage() {
                                   <Label htmlFor="edit-name">Role Name</Label>
                                   <Input
                                     id="edit-name"
-                                    value={selectedRole?.name}
+                                    value={newRole.name}
                                     onChange={(e) =>
-                                      setSelectedRole({ ...selectedRole!, name: e.target.value })
+                                      setNewRole({
+                                        ...newRole,
+                                        name: e.target.value,
+                                      })
                                     }
                                     placeholder="Enter role name"
                                   />
@@ -372,9 +370,12 @@ export default function RolesPage() {
                                   <Label htmlFor="edit-description">Description</Label>
                                   <Textarea
                                     id="edit-description"
-                                    value={selectedRole?.description}
+                                    value={newRole.description}
                                     onChange={(e) =>
-                                      setSelectedRole({ ...selectedRole!, description: e.target.value })
+                                      setNewRole({
+                                        ...newRole,
+                                        description: e.target.value,
+                                      })
                                     }
                                     placeholder="Enter role description"
                                   />
@@ -387,13 +388,13 @@ export default function RolesPage() {
                                         <div key={permission} className="flex items-center space-x-2">
                                           <Checkbox
                                             id={`edit-${permission}`}
-                                            checked={selectedRole?.permissions.includes(permission)}
+                                            checked={newRole.permissions.includes(permission)}
                                             onCheckedChange={(checked) => {
-                                              setSelectedRole({
-                                                ...selectedRole!,
+                                              setNewRole({
+                                                ...newRole,
                                                 permissions: checked
-                                                  ? [...selectedRole!.permissions, permission]
-                                                  : selectedRole!.permissions.filter(p => p !== permission),
+                                                  ? [...newRole.permissions, permission]
+                                                  : newRole.permissions.filter(p => p !== permission),
                                               });
                                             }}
                                           />
@@ -407,13 +408,13 @@ export default function RolesPage() {
                               <DialogFooter>
                                 <Button
                                   variant="outline"
-                                  onClick={() => setIsEditDialogOpen(false)}
-                                  disabled={isLoading}
+                                  onClick={() => setShowEditDialog(false)}
+                                  disabled={loading}
                                 >
                                   Cancel
                                 </Button>
-                                <Button onClick={handleUpdateRole} disabled={isLoading}>
-                                  {isLoading ? (
+                                <Button onClick={handleEditRole} disabled={loading}>
+                                  {loading ? (
                                     <>
                                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                       Updating...
@@ -426,12 +427,13 @@ export default function RolesPage() {
                             </DialogContent>
                           </Dialog>
 
-                          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                          <AlertDialog open={showEditDialog} onOpenChange={setShowEditDialog}>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSelectedRole(role)}
+                                onClick={() => handleDeleteRole(role.id)}
+                                disabled={loading}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -445,13 +447,13 @@ export default function RolesPage() {
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+                                <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={handleDeleteRole}
+                                  onClick={() => handleDeleteRole(role.id)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  disabled={isLoading}
+                                  disabled={loading}
                                 >
-                                  {isLoading ? (
+                                  {loading ? (
                                     <>
                                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                       Deleting...
@@ -464,11 +466,11 @@ export default function RolesPage() {
                             </AlertDialogContent>
                           </AlertDialog>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </CardContent>

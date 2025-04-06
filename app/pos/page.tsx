@@ -53,6 +53,17 @@ import { Separator } from '@/components/ui/separator';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/auth-store';
 import Link from 'next/link';
+import {
+  getProducts,
+  getCustomers,
+  createSale,
+  createSaleItems,
+  updateInventory,
+  getProductStock,
+  getRecentSales,
+  CartItem,
+  Sale,
+} from '@/lib/db/pos';
 
 interface Medicine {
   id: string;
@@ -73,15 +84,6 @@ interface Customer {
   address?: string;
 }
 
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  discount: number;
-  total: number;
-}
-
 interface PaymentMethod {
   id: string;
   name: string;
@@ -98,61 +100,50 @@ const paymentMethods: PaymentMethod[] = [
 export default function POSPage() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Medicine[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [products, setProducts] = useState<Medicine[]>([
-    {
-      id: '1',
-      name: 'Paracetamol 500mg',
-      price: 5.99,
-      stock: 100,
-      category: 'Pain Relief',
-      costPrice: 3.50,
-    },
-    {
-      id: '2',
-      name: 'Amoxicillin 250mg',
-      price: 12.99,
-      stock: 50,
-      category: 'Antibiotics',
-      costPrice: 8.00,
-    },
-    {
-      id: '3',
-      name: 'Vitamin C 1000mg',
-      price: 15.99,
-      stock: 75,
-      category: 'Vitamins',
-      costPrice: 10.00,
-    },
-  ]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string>('');
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [orderId, setOrderId] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      phone: '+1234567890',
-      email: 'john@example.com',
-      address: '123 Main St',
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      phone: '+0987654321',
-      email: 'jane@example.com',
-      address: '456 Oak Ave',
-    },
-  ]);
   const [newCustomer, setNewCustomer] = useState<Partial<Customer>>({});
   const [globalDiscount, setGlobalDiscount] = useState<number>(0);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'failed'>('pending');
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [currentSale, setCurrentSale] = useState<Sale | null>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [productsData, customersData, salesData] = await Promise.all([
+        getProducts(),
+        getCustomers(),
+        getRecentSales(),
+      ]);
+      setProducts(productsData);
+      setCustomers(customersData);
+      setRecentSales(salesData);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load data. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredProducts = products.filter((product) =>
     product.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -162,55 +153,66 @@ export default function POSPage() {
   const discountAmount = cartTotal * (globalDiscount / 100);
   const finalTotal = cartTotal - discountAmount;
 
-  const handleAddToCart = (product: Medicine) => {
-    const existingItem = cart.find((item) => item.id === product.id);
+  const handleAddToCart = async (product: Medicine) => {
+    const existingItem = cart.find((item) => item.product_id === product.id);
+    const stock = await getProductStock(product.id);
+
     if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
+      if (existingItem.quantity + 1 > stock) {
         toast({
-          title: 'Stock limit reached',
-          description: 'Cannot add more items than available stock.',
+          title: 'Error',
+          description: 'Not enough stock available.',
           variant: 'destructive',
         });
         return;
       }
       setCart(
         cart.map((item) =>
-          item.id === product.id
+          item.product_id === product.id
             ? {
                 ...item,
                 quantity: item.quantity + 1,
-                total: (item.price * (item.quantity + 1)) * (1 - item.discount / 100),
+                total: (item.quantity + 1) * item.price * (1 - item.discount / 100),
               }
             : item
         )
       );
     } else {
+      if (stock < 1) {
+        toast({
+          title: 'Error',
+          description: 'Not enough stock available.',
+          variant: 'destructive',
+        });
+        return;
+      }
       setCart([
         ...cart,
         {
-          id: product.id,
+          product_id: product.id,
           name: product.name,
-          price: product.price,
           quantity: 1,
-          discount: 0,
+          price: product.price,
           total: product.price,
+          discount: 0,
         },
       ]);
     }
   };
 
   const handleRemoveFromCart = (id: string) => {
-    setCart(cart.filter((item) => item.id !== id));
+    setCart(cart.filter((item) => item.product_id !== id));
   };
 
-  const handleUpdateQuantity = (id: string, quantity: number) => {
+  const handleUpdateQuantity = async (id: string, quantity: number) => {
     const product = products.find(p => p.id === id);
     if (!product) return;
 
-    if (quantity > product.stock) {
+    const stock = await getProductStock(id);
+    if (quantity > stock) {
       toast({
-        title: 'Stock limit reached',
-        description: 'Cannot add more items than available stock.',
+        title: 'Error',
+        description: 'Not enough stock available.',
         variant: 'destructive',
       });
       return;
@@ -218,7 +220,7 @@ export default function POSPage() {
 
     setCart(
       cart.map((item) =>
-        item.id === id
+        item.product_id === id
           ? {
               ...item,
               quantity: Math.max(0, quantity),
@@ -232,7 +234,7 @@ export default function POSPage() {
   const handleUpdateItemDiscount = (id: string, discount: number) => {
     setCart(
       cart.map((item) =>
-        item.id === id
+        item.product_id === id
           ? {
               ...item,
               discount: Math.max(0, Math.min(100, discount)),
@@ -353,7 +355,7 @@ export default function POSPage() {
 
     // Update stock
     setProducts(products.map(product => {
-      const cartItem = cart.find(item => item.id === product.id);
+      const cartItem = cart.find(item => item.product_id === product.id);
       if (cartItem) {
         return {
           ...product,
@@ -365,7 +367,7 @@ export default function POSPage() {
 
     // Clear cart and reset state
     setCart([]);
-    setPaymentMethod('');
+    setPaymentMethod('cash');
     setGlobalDiscount(0);
     setShowQRCode(false);
     setShowPaymentDialog(false);
@@ -381,6 +383,10 @@ export default function POSPage() {
     // Implement receipt printing logic
     window.print();
   };
+
+  if (loading) {
+    return <Loader text="Loading POS..." />;
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -491,7 +497,7 @@ export default function POSPage() {
                     <AnimatePresence>
                       {cart.map((item) => (
                         <motion.div
-                          key={item.id}
+                          key={item.product_id}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -20 }}
@@ -502,7 +508,7 @@ export default function POSPage() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => handleRemoveFromCart(item.id)}
+                              onClick={() => handleRemoveFromCart(item.product_id)}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -521,7 +527,7 @@ export default function POSPage() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6"
-                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                              onClick={() => handleUpdateQuantity(item.product_id, item.quantity - 1)}
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
@@ -530,7 +536,7 @@ export default function POSPage() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6"
-                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                              onClick={() => handleUpdateQuantity(item.product_id, item.quantity + 1)}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
@@ -544,11 +550,11 @@ export default function POSPage() {
                                 onChange={(e) => {
                                   const value = parseFloat(e.target.value);
                                   if (isNaN(value) || value < 0) {
-                                    handleUpdateItemDiscount(item.id, 0);
+                                    handleUpdateItemDiscount(item.product_id, 0);
                                   } else if (value > 100) {
-                                    handleUpdateItemDiscount(item.id, 100);
+                                    handleUpdateItemDiscount(item.product_id, 100);
                                   } else {
-                                    handleUpdateItemDiscount(item.id, value);
+                                    handleUpdateItemDiscount(item.product_id, value);
                                   }
                                 }}
                                 min="0"
@@ -879,6 +885,77 @@ export default function POSPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Recent Sales */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Recent Sales</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {recentSales.map((sale) => (
+              <div
+                key={sale.id}
+                className="flex justify-between items-center p-2 rounded-md hover:bg-muted/50"
+              >
+                <div>
+                  <p className="font-medium">
+                    {sale.customer?.name || 'Walk-in Customer'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(sale.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">
+                    ${sale.total_amount.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {sale.payment_method}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Receipt Dialog */}
+      {showReceipt && currentSale && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Receipt</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between">
+                  <span>Sale ID:</span>
+                  <span>{currentSale.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Date:</span>
+                  <span>{new Date(currentSale.created_at).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Payment Method:</span>
+                  <span>{currentSale.payment_method}</span>
+                </div>
+                <div className="flex justify-between font-bold">
+                  <span>Total:</span>
+                  <span>${currentSale.total_amount.toFixed(2)}</span>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => setShowReceipt(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

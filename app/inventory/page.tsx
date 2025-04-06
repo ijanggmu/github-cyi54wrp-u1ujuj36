@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,10 +37,13 @@ import {
   Eye,
   Trash2,
   Loader2,
+  AlertTriangle,
   Package,
-  AlertCircle,
+  ArrowUpDown,
 } from 'lucide-react';
 import { Loader } from "@/components/ui/loader";
+import { getInventory, updateStock, updateReorderLevel, getLowStockItems, getStockHistory, addStockHistory } from '@/lib/db/inventory';
+import { InventoryItem } from '@/lib/db/inventory';
 
 interface Category {
   id: string;
@@ -73,6 +76,16 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [stockHistory, setStockHistory] = useState<any[]>([]);
+  const [updateData, setUpdateData] = useState({
+    quantity: 0,
+    reorder_level: 0,
+  });
   
   // Sample data - replace with API calls
   const [categories, setCategories] = useState<Category[]>([
@@ -129,14 +142,119 @@ export default function InventoryPage() {
     company: '',
   });
 
-  const filteredMedicines = medicines.filter((medicine) => {
-    const matchesSearch = medicine.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      selectedCategory === 'all' || medicine.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  useEffect(() => {
+    loadInventory();
+    loadLowStockItems();
+  }, []);
+
+  const loadInventory = async () => {
+    setLoading(true);
+    try {
+      const data = await getInventory();
+      setInventory(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load inventory. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLowStockItems = async () => {
+    try {
+      const data = await getLowStockItems();
+      setLowStockItems(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load low stock items. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const loadStockHistory = async (product_id: string) => {
+    try {
+      const data = await getStockHistory(product_id);
+      setStockHistory(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load stock history. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const filteredInventory = inventory.filter((item) =>
+    item.products?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.products?.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.products?.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleUpdateStock = async () => {
+    if (!selectedItem) return;
+
+    setLoading(true);
+    try {
+      await updateStock(selectedItem.id, updateData.quantity);
+      await addStockHistory({
+        product_id: selectedItem.product_id,
+        quantity: updateData.quantity,
+        type: updateData.quantity > selectedItem.quantity ? 'in' : 'out',
+        notes: `Stock updated from ${selectedItem.quantity} to ${updateData.quantity}`,
+      });
+      await loadInventory();
+      setShowUpdateDialog(false);
+      
+      toast({
+        title: 'Stock updated',
+        description: 'Inventory stock has been updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update stock. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateReorderLevel = async (id: string, reorder_level: number) => {
+    setLoading(true);
+    try {
+      await updateReorderLevel(id, reorder_level);
+      await loadInventory();
+      
+      toast({
+        title: 'Reorder level updated',
+        description: 'Reorder level has been updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update reorder level. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStockStatus = (quantity: number, reorder_level: number) => {
+    if (quantity <= 0) {
+      return { text: 'Out of Stock', color: 'text-red-500' };
+    } else if (quantity <= reorder_level) {
+      return { text: 'Low Stock', color: 'text-yellow-500' };
+    } else {
+      return { text: 'In Stock', color: 'text-green-500' };
+    }
+  };
 
   const handleAddCategory = async () => {
     if (!newCategory.name) {
@@ -525,15 +643,15 @@ export default function InventoryPage() {
 
       {/* Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {lowStockMedicines.length > 0 && (
+        {lowStockItems.length > 0 && (
           <Card className="bg-yellow-50">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-500" />
+                <AlertTriangle className="h-5 w-5 text-yellow-500" />
                 <div>
                   <h3 className="font-semibold text-yellow-800">Low Stock Alert</h3>
                   <p className="text-sm text-yellow-700">
-                    {lowStockMedicines.length} medicines are running low on stock
+                    {lowStockItems.length} medicines are running low on stock
                   </p>
                 </div>
               </div>
@@ -544,7 +662,7 @@ export default function InventoryPage() {
           <Card className="bg-red-50">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-500" />
+                <AlertTriangle className="h-5 w-5 text-red-500" />
                 <div>
                   <h3 className="font-semibold text-red-800">Expired Medicines</h3>
                   <p className="text-sm text-red-700">
@@ -563,334 +681,180 @@ export default function InventoryPage() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search medicines..."
+                placeholder="Search inventory..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-8"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.name}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <Loader text="Loading inventory..." />
-          ) : filteredMedicines.length === 0 ? (
+          ) : filteredInventory.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">No medicines found.</p>
+              <p className="text-muted-foreground">No inventory items found.</p>
             </div>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>SKU</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Cost Price</TableHead>
-                    <TableHead>Selling Price</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Expiry Date</TableHead>
+                    <TableHead>Current Stock</TableHead>
+                    <TableHead>Reorder Level</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMedicines.map((medicine) => (
-                    <TableRow key={medicine.id}>
-                      <TableCell className="font-medium">{medicine.name}</TableCell>
-                      <TableCell>{medicine.category}</TableCell>
-                      <TableCell>{medicine.supplier}</TableCell>
-                      <TableCell>${medicine.costPrice.toFixed(2)}</TableCell>
-                      <TableCell>${medicine.sellingPrice.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={medicine.stock > medicine.minStock ? "default" : "destructive"}
-                        >
-                          {medicine.stock}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={new Date(medicine.expiryDate) > new Date() ? "default" : "destructive"}
-                        >
-                          {medicine.expiryDate}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setSelectedMedicine(medicine)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Medicine Details</DialogTitle>
-                              </DialogHeader>
-                              {selectedMedicine && (
+                  {filteredInventory.map((item) => {
+                    const status = getStockStatus(item.quantity, item.reorder_level);
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.products?.name}</TableCell>
+                        <TableCell>{item.products?.sku}</TableCell>
+                        <TableCell>{item.products?.category}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={item.reorder_level}
+                            onChange={(e) =>
+                              handleUpdateReorderLevel(item.id, parseInt(e.target.value))
+                            }
+                            className="w-20"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <span className={status.color}>{status.text}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    setUpdateData({
+                                      quantity: item.quantity,
+                                      reorder_level: item.reorder_level,
+                                    });
+                                  }}
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Update Stock</DialogTitle>
+                                </DialogHeader>
                                 <div className="space-y-4">
                                   <div>
-                                    <Label>Name</Label>
-                                    <p>{selectedMedicine.name}</p>
+                                    <Label>Product</Label>
+                                    <p className="font-medium">{item.products?.name}</p>
                                   </div>
-                                  <div>
-                                    <Label>Category</Label>
-                                    <p>{selectedMedicine.category}</p>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="quantity">New Quantity</Label>
+                                    <Input
+                                      id="quantity"
+                                      type="number"
+                                      value={updateData.quantity}
+                                      onChange={(e) =>
+                                        setUpdateData({
+                                          ...updateData,
+                                          quantity: parseInt(e.target.value),
+                                        })
+                                      }
+                                    />
                                   </div>
-                                  <div>
-                                    <Label>Supplier</Label>
-                                    <p>{selectedMedicine.supplier}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Cost Price</Label>
-                                    <p>${selectedMedicine.costPrice.toFixed(2)}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Selling Price</Label>
-                                    <p>${selectedMedicine.sellingPrice.toFixed(2)}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Current Stock</Label>
-                                    <p>{selectedMedicine.stock}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Minimum Stock</Label>
-                                    <p>{selectedMedicine.minStock}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Expiry Date</Label>
-                                    <p>{selectedMedicine.expiryDate}</p>
-                                  </div>
-                                  {selectedMedicine.description && (
-                                    <div>
-                                      <Label>Description</Label>
-                                      <p>{selectedMedicine.description}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-
-                          <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setSelectedMedicine(medicine);
-                                  setNewMedicine({
-                                    name: medicine.name,
-                                    category: medicine.category,
-                                    supplier: medicine.supplier,
-                                    costPrice: medicine.costPrice,
-                                    sellingPrice: medicine.sellingPrice,
-                                    stock: medicine.stock,
-                                    minStock: medicine.minStock,
-                                    expiryDate: medicine.expiryDate,
-                                    description: medicine.description || '',
-                                  });
-                                }}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Edit Medicine</DialogTitle>
-                              </DialogHeader>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-name">Name</Label>
-                                  <Input
-                                    id="edit-name"
-                                    value={newMedicine.name}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        name: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-category">Category</Label>
-                                  <Select
-                                    value={newMedicine.category}
-                                    onValueChange={(value) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        category: value,
-                                      })
-                                    }
+                                  <Button
+                                    className="w-full"
+                                    onClick={handleUpdateStock}
+                                    disabled={loading}
                                   >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select category" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {categories.map((category) => (
-                                        <SelectItem key={category.id} value={category.name}>
-                                          {category.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                    {loading ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Updating...
+                                      </>
+                                    ) : (
+                                      'Update Stock'
+                                    )}
+                                  </Button>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-supplier">Supplier</Label>
-                                  <Select
-                                    value={newMedicine.supplier}
-                                    onValueChange={(value) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        supplier: value,
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select supplier" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {suppliers.map((supplier) => (
-                                        <SelectItem key={supplier.id} value={supplier.company}>
-                                          {supplier.company}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-costPrice">Cost Price</Label>
-                                  <Input
-                                    id="edit-costPrice"
-                                    type="number"
-                                    step="0.01"
-                                    value={newMedicine.costPrice}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        costPrice: parseFloat(e.target.value),
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-sellingPrice">Selling Price</Label>
-                                  <Input
-                                    id="edit-sellingPrice"
-                                    type="number"
-                                    step="0.01"
-                                    value={newMedicine.sellingPrice}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        sellingPrice: parseFloat(e.target.value),
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-stock">Current Stock</Label>
-                                  <Input
-                                    id="edit-stock"
-                                    type="number"
-                                    value={newMedicine.stock}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        stock: parseInt(e.target.value),
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-minStock">Minimum Stock</Label>
-                                  <Input
-                                    id="edit-minStock"
-                                    type="number"
-                                    value={newMedicine.minStock}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        minStock: parseInt(e.target.value),
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-expiryDate">Expiry Date</Label>
-                                  <Input
-                                    id="edit-expiryDate"
-                                    type="date"
-                                    value={newMedicine.expiryDate}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        expiryDate: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2 col-span-2">
-                                  <Label htmlFor="edit-description">Description (Optional)</Label>
-                                  <Input
-                                    id="edit-description"
-                                    value={newMedicine.description}
-                                    onChange={(e) =>
-                                      setNewMedicine({
-                                        ...newMedicine,
-                                        description: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                              <Button
-                                className="w-full mt-4"
-                                onClick={handleEditMedicine}
-                                disabled={loading}
-                              >
-                                {loading ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Updating...
-                                  </>
-                                ) : (
-                                  'Update Medicine'
-                                )}
-                              </Button>
-                            </DialogContent>
-                          </Dialog>
+                              </DialogContent>
+                            </Dialog>
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteMedicine(medicine.id)}
-                            disabled={loading}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    loadStockHistory(item.product_id);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Stock History</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label>Product</Label>
+                                    <p className="font-medium">{item.products?.name}</p>
+                                  </div>
+                                  <div className="rounded-md border">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Date</TableHead>
+                                          <TableHead>Type</TableHead>
+                                          <TableHead>Quantity</TableHead>
+                                          <TableHead>Notes</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {stockHistory.map((history) => (
+                                          <TableRow key={history.id}>
+                                            <TableCell>
+                                              {new Date(history.created_at).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell>
+                                              <span
+                                                className={
+                                                  history.type === 'in'
+                                                    ? 'text-green-500'
+                                                    : 'text-red-500'
+                                                }
+                                              >
+                                                {history.type === 'in' ? 'In' : 'Out'}
+                                              </span>
+                                            </TableCell>
+                                            <TableCell>{history.quantity}</TableCell>
+                                            <TableCell>{history.notes}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

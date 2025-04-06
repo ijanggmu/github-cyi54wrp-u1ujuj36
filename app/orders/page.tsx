@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,12 @@ import {
   Loader2,
   Minus,
   Printer,
+  Edit2,
+  Eye,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
@@ -41,237 +47,53 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-interface OrderItem {
-  id: string;
-  name: string;
-  quantity: number;
-  price: number;
-  discount: number;
-  total: number;
-}
-
-interface Order {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  date: string;
-  total: number;
-  status: 'completed' | 'refunded' | 'pending';
-  paymentMethod: string;
-  items: OrderItem[];
-}
+import { Loader } from "@/components/ui/loader";
+import { getOrders, createOrder, updateOrder, deleteOrder, updateOrderStatus, updatePaymentStatus } from '@/lib/db/orders';
+import { Order, OrderItem } from '@/lib/db/orders';
+import { getProducts } from '@/lib/db/products';
+import { getCustomers } from '@/lib/db/customers';
+import { Product } from '@/lib/db/products';
+import { Customer } from '@/lib/db/customers';
 
 export default function OrdersPage() {
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showRefundDialog, setShowRefundDialog] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [refundReason, setRefundReason] = useState('');
   const [loading, setLoading] = useState(false);
-  const [refundItems, setRefundItems] = useState<{ [key: string]: number }>({});
-  const [partialRefund, setPartialRefund] = useState(false);
-  const [refundPaymentMethod, setRefundPaymentMethod] = useState<string>('');
-  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [refundTransaction, setRefundTransaction] = useState<Order | null>(null);
-
-  // Sample data - replace with API call
-  const orders: Order[] = [
-    {
-      id: '1',
-      orderNumber: 'ORD-001',
-      customerName: 'John Doe',
-      date: '2024-03-20 14:30',
-      total: 150.50,
-      status: 'completed',
-      paymentMethod: 'Cash',
-      items: [
-        {
-          id: '1',
-          name: 'Paracetamol 500mg',
-          quantity: 2,
-          price: 5.99,
-          discount: 0,
-          total: 11.98,
-        },
-        {
-          id: '2',
-          name: 'Amoxicillin 250mg',
-          quantity: 1,
-          price: 12.99,
-          discount: 10,
-          total: 11.69,
-        },
-      ],
-    },
-    {
-      id: '2',
-      orderNumber: 'ORD-002',
-      customerName: 'Jane Smith',
-      date: '2024-03-20 15:45',
-      total: 75.25,
-      status: 'refunded',
-      paymentMethod: 'Card',
-      items: [
-        {
-          id: '3',
-          name: 'Ibuprofen 200mg',
-          quantity: 3,
-          price: 8.99,
-          discount: 5,
-          total: 26.97,
-        },
-        {
-          id: '4',
-          name: 'Aspirin 100mg',
-          quantity: 5,
-          price: 5.99,
-          discount: 0,
-          total: 29.95,
-        },
-      ],
-    },
-    {
-      id: '3',
-      orderNumber: 'ORD-003',
-      customerName: 'Mike Johnson',
-      date: '2024-03-20 16:15',
-      total: 200.00,
-      status: 'pending',
-      paymentMethod: 'PhonePe',
-      items: [
-        {
-          id: '5',
-          name: 'Naproxen 500mg',
-          quantity: 4,
-          price: 12.99,
-          discount: 0,
-          total: 51.96,
-        },
-        {
-          id: '6',
-          name: 'Hydrochlorothiazide 25mg',
-          quantity: 2,
-          price: 15.99,
-          discount: 0,
-          total: 31.98,
-        },
-      ],
-    },
-  ];
-
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === 'all' || order.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [newOrder, setNewOrder] = useState({
+    customer_id: '',
+    status: 'pending' as const,
+    payment_status: 'pending' as const,
+    notes: '',
+    total_amount: 0,
   });
+  const [orderItems, setOrderItems] = useState<{
+    product_id: string;
+    quantity: number;
+    price: number;
+  }[]>([]);
 
-  const handleRefundQuantityChange = (itemId: string, change: number) => {
-    setRefundItems((prev) => {
-      const currentQuantity = prev[itemId] || 0;
-      const newQuantity = Math.max(0, Math.min(
-        selectedOrder?.items.find(item => item.id === itemId)?.quantity || 0,
-        currentQuantity + change
-      ));
-      
-      if (newQuantity === 0) {
-        const { [itemId]: _, ...rest } = prev;
-        return rest;
-      }
-      
-      return {
-        ...prev,
-        [itemId]: newQuantity,
-      };
-    });
-  };
+  useEffect(() => {
+    loadOrders();
+    loadProducts();
+    loadCustomers();
+  }, []);
 
-  const calculateRefundTotal = () => {
-    if (!selectedOrder) return 0;
-    return selectedOrder.items.reduce((total, item) => {
-      const refundQuantity = refundItems[item.id] || 0;
-      return total + (item.price * refundQuantity * (1 - item.discount / 100));
-    }, 0);
-  };
-
-  const handleRefund = async () => {
-    if (!selectedOrder) return;
-    
-    if (!refundReason) {
-      toast({
-        title: 'Refund reason required',
-        description: 'Please provide a reason for the refund.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!refundPaymentMethod) {
-      toast({
-        title: 'Payment method required',
-        description: 'Please select a refund payment method.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (Object.keys(refundItems).length === 0) {
-      toast({
-        title: 'No items selected',
-        description: 'Please select items to refund.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const loadOrders = async () => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // Create refund transaction
-      const refundAmount = calculateRefundTotal();
-      const refundTransaction: Order = {
-        id: `REF-${Date.now()}`,
-        orderNumber: `REF-${selectedOrder.orderNumber}`,
-        customerName: selectedOrder.customerName,
-        date: new Date().toLocaleString(),
-        total: -refundAmount, // Negative amount for refund
-        status: 'completed',
-        paymentMethod: refundPaymentMethod,
-        items: selectedOrder.items
-          .filter(item => refundItems[item.id] > 0)
-          .map(item => ({
-            ...item,
-            quantity: refundItems[item.id],
-            total: -(item.price * refundItems[item.id] * (1 - item.discount / 100))
-          }))
-      };
-
-      setRefundTransaction(refundTransaction);
-      setShowSuccessDialog(true);
-      
-      toast({
-        title: 'Refund processed',
-        description: `Order #${selectedOrder.orderNumber} has been refunded successfully.`,
-      });
-
-      setShowRefundDialog(false);
-      setSelectedOrder(null);
-      setRefundReason('');
-      setRefundItems({});
-      setRefundPaymentMethod('');
-      setPartialRefund(false);
-      
-      // Update order status in your state management
+      const data = await getOrders();
+      setOrders(data);
     } catch (error) {
       toast({
-        title: 'Refund failed',
-        description: 'Failed to process refund. Please try again.',
+        title: 'Error',
+        description: 'Failed to load orders. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -279,357 +101,468 @@ export default function OrdersPage() {
     }
   };
 
+  const loadProducts = async () => {
+    try {
+      const data = await getProducts();
+      setProducts(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load products. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      const data = await getCustomers();
+      setCustomers(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load customers. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const filteredOrders = orders.filter((order) =>
+    order.customers?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.id.includes(searchQuery) ||
+    order.status.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleAddOrder = async () => {
+    if (!newOrder.customer_id || orderItems.length === 0) {
+      toast({
+        title: 'Missing information',
+        description: 'Please select a customer and add at least one item.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await createOrder(newOrder, orderItems);
+      await loadOrders();
+      setShowAddDialog(false);
+      setNewOrder({
+        customer_id: '',
+        status: 'pending',
+        payment_status: 'pending',
+        notes: '',
+        total_amount: 0,
+      });
+      setOrderItems([]);
+      
+      toast({
+        title: 'Order added',
+        description: 'New order has been added successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add order. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (id: string, status: Order['status']) => {
+    setLoading(true);
+    try {
+      await updateOrderStatus(id, status);
+      await loadOrders();
+      
+      toast({
+        title: 'Status updated',
+        description: 'Order status has been updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update status. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (id: string, payment_status: Order['payment_status']) => {
+    setLoading(true);
+    try {
+      await updatePaymentStatus(id, payment_status);
+      await loadOrders();
+      
+      toast({
+        title: 'Payment status updated',
+        description: 'Payment status has been updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update payment status. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOrder = async (id: string) => {
+    setLoading(true);
+    try {
+      await deleteOrder(id);
+      await loadOrders();
+      
+      toast({
+        title: 'Order deleted',
+        description: 'Order has been deleted successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete order. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addOrderItem = () => {
+    setOrderItems([...orderItems, { product_id: '', quantity: 1, price: 0 }]);
+  };
+
+  const removeOrderItem = (index: number) => {
+    setOrderItems(orderItems.filter((_, i) => i !== index));
+  };
+
+  const updateOrderItem = (index: number, field: string, value: any) => {
+    const updatedItems = [...orderItems];
+    if (field === 'product_id') {
+      updatedItems[index] = { ...updatedItems[index], [field]: String(value) };
+    } else {
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
+    }
+    setOrderItems(updatedItems);
+  };
+
+  const getStatusIcon = (status: Order['status']) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case 'cancelled':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+    }
+  };
+
   return (
-    <div className="h-full p-8 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Orders</h2>
+          <h1 className="text-3xl font-bold">Orders</h1>
           <p className="text-muted-foreground">
-            Manage and track all your orders
+            Manage your pharmacy orders
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Link href="/pos">
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              New Order
+              Add Order
             </Button>
-          </Link>
-        </div>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Order</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="customer">Customer</Label>
+                <Select
+                  value={newOrder.customer_id}
+                  onValueChange={(value) =>
+                    setNewOrder({ ...newOrder, customer_id: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Order Items</Label>
+                <div className="space-y-4">
+                  {orderItems.map((item, index) => (
+                    <div key={index} className="grid grid-cols-4 gap-4 items-end">
+                      <div className="space-y-2">
+                        <Label>Product</Label>
+                        <Select
+                          value={item.product_id}
+                          onValueChange={(value) => {
+                            const product = products.find(p => p.id === value);
+                            updateOrderItem(index, 'product_id', value);
+                            updateOrderItem(index, 'price', product?.price || 0);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select product" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Quantity</Label>
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            updateOrderItem(index, 'quantity', parseInt(e.target.value))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Price</Label>
+                        <Input
+                          type="number"
+                          value={item.price}
+                          onChange={(e) =>
+                            updateOrderItem(index, 'price', parseFloat(e.target.value))
+                          }
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeOrderItem(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    onClick={addOrderItem}
+                    className="w-full"
+                  >
+                    Add Item
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Input
+                  id="notes"
+                  value={newOrder.notes}
+                  onChange={(e) =>
+                    setNewOrder({ ...newOrder, notes: e.target.value })
+                  }
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleAddOrder}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Order'
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>All Orders</CardTitle>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search orders..."
-                  className="pl-8 w-[300px]"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <select
-                  className="border rounded-md px-2 py-1 text-sm"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="refunded">Refunded</option>
-                  <option value="pending">Pending</option>
-                </select>
-              </div>
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search orders..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell>
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {order.orderNumber}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{order.customerName}</TableCell>
-                    <TableCell>{order.date}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        {order.items.length} items
-                      </div>
-                    </TableCell>
-                    <TableCell>${order.total.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-muted-foreground" />
-                        {order.paymentMethod}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          order.status === 'completed'
-                            ? 'default'
-                            : order.status === 'refunded'
-                            ? 'destructive'
-                            : 'secondary'
-                        }
-                      >
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {order.status === 'completed' && (
-                        <Dialog open={showRefundDialog && selectedOrder?.id === order.id} onOpenChange={setShowRefundDialog}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 px-3 bg-gradient-to-r from-destructive to-destructive/90 hover:from-destructive/90 hover:to-destructive text-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-1.5 text-sm font-medium"
-                              onClick={() => setSelectedOrder(order)}
-                            >
-                              <Receipt className="h-3.5 w-3.5" />
-                              Refund
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Process Refund</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label>Order Details</Label>
-                                <div className="text-sm space-y-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Order Number:</span>
-                                    <span className="font-medium">#{order.orderNumber}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Customer:</span>
-                                    <span className="font-medium">{order.customerName}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label>Select Items to Refund</Label>
-                                <div className="rounded-md border">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead className="text-right">Price</TableHead>
-                                        <TableHead className="text-right">Quantity</TableHead>
-                                        <TableHead className="text-right">Refund Qty</TableHead>
-                                        <TableHead className="text-right">Refund Amount</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {order.items.map((item) => {
-                                        const refundQuantity = refundItems[item.id] || 0;
-                                        const refundAmount = item.price * refundQuantity * (1 - item.discount / 100);
-                                        return (
-                                          <TableRow key={item.id}>
-                                            <TableCell>{item.name}</TableCell>
-                                            <TableCell className="text-right">${item.price.toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">{item.quantity}</TableCell>
-                                            <TableCell className="text-right">
-                                              <div className="flex items-center justify-end gap-2">
-                                                <Button
-                                                  variant="outline"
-                                                  size="icon"
-                                                  className="h-6 w-6"
-                                                  onClick={() => handleRefundQuantityChange(item.id, -1)}
-                                                >
-                                                  <Minus className="h-3 w-3" />
-                                                </Button>
-                                                <span className="w-8 text-center">{refundQuantity}</span>
-                                                <Button
-                                                  variant="outline"
-                                                  size="icon"
-                                                  className="h-6 w-6"
-                                                  onClick={() => handleRefundQuantityChange(item.id, 1)}
-                                                >
-                                                  <Plus className="h-3 w-3" />
-                                                </Button>
-                                              </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">${refundAmount.toFixed(2)}</TableCell>
-                                          </TableRow>
-                                        );
-                                      })}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                                <div className="flex justify-between items-center text-sm font-medium">
-                                  <span>Total Refund Amount:</span>
-                                  <span>${calculateRefundTotal().toFixed(2)}</span>
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label>Refund Payment Method</Label>
-                                <Select value={refundPaymentMethod} onValueChange={setRefundPaymentMethod}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select payment method" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="cash">Cash</SelectItem>
-                                    <SelectItem value="card">Card</SelectItem>
-                                    <SelectItem value="phonepe">PhonePe</SelectItem>
-                                    <SelectItem value="upi">UPI</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label>Reason for Refund</Label>
-                                <Input
-                                  placeholder="Enter reason for refund..."
-                                  value={refundReason}
-                                  onChange={(e) => setRefundReason(e.target.value)}
-                                />
-                              </div>
-
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  className="w-full"
-                                  onClick={() => {
-                                    setShowRefundDialog(false);
-                                    setSelectedOrder(null);
-                                    setRefundReason('');
-                                    setRefundItems({});
-                                    setRefundPaymentMethod('');
-                                    setPartialRefund(false);
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  className="w-full"
-                                  onClick={handleRefund}
-                                  disabled={loading}
-                                >
-                                  {loading ? (
-                                    <>
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      Processing...
-                                    </>
-                                  ) : (
-                                    'Confirm Refund'
-                                  )}
-                                </Button>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                    </TableCell>
+          {loading ? (
+            <Loader text="Loading orders..." />
+          ) : filteredOrders.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No orders found.</p>
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">{order.id}</TableCell>
+                      <TableCell>{order.customers?.name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(order.status)}
+                          {order.status}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={order.payment_status}
+                          onValueChange={(value: Order['payment_status']) =>
+                            handleUpdatePaymentStatus(order.id, value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="paid">Paid</SelectItem>
+                            <SelectItem value="failed">Failed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>${order.total_amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSelectedOrder(order)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Order Details</DialogTitle>
+                              </DialogHeader>
+                              {selectedOrder && (
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label>Order ID</Label>
+                                    <p>{selectedOrder.id}</p>
+                                  </div>
+                                  <div>
+                                    <Label>Customer</Label>
+                                    <p>{selectedOrder.customers?.name}</p>
+                                  </div>
+                                  <div>
+                                    <Label>Status</Label>
+                                    <p>{selectedOrder.status}</p>
+                                  </div>
+                                  <div>
+                                    <Label>Payment Status</Label>
+                                    <p>{selectedOrder.payment_status}</p>
+                                  </div>
+                                  <div>
+                                    <Label>Total Amount</Label>
+                                    <p>${selectedOrder.total_amount.toFixed(2)}</p>
+                                  </div>
+                                  {selectedOrder.notes && (
+                                    <div>
+                                      <Label>Notes</Label>
+                                      <p>{selectedOrder.notes}</p>
+                                    </div>
+                                  )}
+                                  <div>
+                                    <Label>Order Items</Label>
+                                    <div className="space-y-2">
+                                      {selectedOrder.order_items?.map((item) => (
+                                        <div key={item.id} className="flex justify-between">
+                                          <span>{item.products?.name}</span>
+                                          <span>
+                                            {item.quantity} x ${item.price.toFixed(2)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+
+                          <Select
+                            value={order.status}
+                            onValueChange={(value: Order['status']) =>
+                              handleUpdateStatus(order.id, value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="processing">Processing</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteOrder(order.id)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Success Dialog */}
-      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Refund Successful</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {refundTransaction && (
-              <>
-                <div className="space-y-2">
-                  <Label>Refund Transaction Details</Label>
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Transaction ID:</span>
-                      <span className="font-medium">#{refundTransaction.orderNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Amount:</span>
-                      <span className="font-medium text-destructive">
-                        ${Math.abs(refundTransaction.total).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Payment Method:</span>
-                      <span className="font-medium">{refundTransaction.paymentMethod}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Date:</span>
-                      <span className="font-medium">{refundTransaction.date}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {refundTransaction.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right text-destructive">
-                            ${Math.abs(item.total).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex justify-between items-center text-sm font-medium">
-                  <span>Total Refund Amount:</span>
-                  <span className="text-destructive">
-                    ${Math.abs(refundTransaction.total).toFixed(2)}
-                  </span>
-                </div>
-              </>
-            )}
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowSuccessDialog(false)}
-              >
-                Close
-              </Button>
-              <Button
-                className="w-full"
-                onClick={() => {
-                  setShowSuccessDialog(false);
-                  // Add print functionality here
-                }}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print Receipt
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 } 

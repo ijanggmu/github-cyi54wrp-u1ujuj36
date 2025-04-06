@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,35 +32,20 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Loader } from "@/components/ui/loader";
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-  address?: string;
-  createdAt: string;
-  lastVisit: string;
-  totalSpent: number;
-}
+import { 
+  getCustomers, 
+  createCustomer, 
+  updateCustomer, 
+  deleteCustomer, 
+  searchCustomers,
+  Customer 
+} from '@/lib/db/customers';
 
 export default function CustomersPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      phone: '+1 234 567 8900',
-      email: 'john@example.com',
-      address: '123 Main St, City',
-      createdAt: '2024-01-15',
-      lastVisit: '2024-03-15',
-      totalSpent: 1500,
-    },
-    // Add more sample customers...
-  ]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -72,11 +57,47 @@ export default function CustomersPage() {
     address: '',
   });
 
-  const filteredCustomers = customers.filter((customer) =>
-    customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    customer.phone.includes(searchQuery) ||
-    customer.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    setLoading(true);
+    try {
+      const data = await getCustomers();
+      setCustomers(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load customers. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (query.trim() === '') {
+      loadCustomers();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await searchCustomers(query);
+      setCustomers(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to search customers. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddCustomer = async () => {
     if (!newCustomer.name || !newCustomer.phone) {
@@ -90,18 +111,8 @@ export default function CustomersPage() {
 
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      const customer: Customer = {
-        id: `${customers.length + 1}`,
-        ...newCustomer,
-        createdAt: new Date().toISOString().split('T')[0],
-        lastVisit: new Date().toISOString().split('T')[0],
-        totalSpent: 0,
-      };
-      
-      setCustomers([...customers, customer]);
+      await createCustomer(newCustomer);
+      await loadCustomers();
       setShowAddDialog(false);
       setNewCustomer({ name: '', phone: '', email: '', address: '' });
       
@@ -125,15 +136,8 @@ export default function CustomersPage() {
 
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      setCustomers(customers.map(customer =>
-        customer.id === selectedCustomer.id
-          ? { ...customer, ...newCustomer }
-          : customer
-      ));
-      
+      await updateCustomer(selectedCustomer.id, newCustomer);
+      await loadCustomers();
       setShowEditDialog(false);
       setSelectedCustomer(null);
       setNewCustomer({ name: '', phone: '', email: '', address: '' });
@@ -156,10 +160,8 @@ export default function CustomersPage() {
   const handleDeleteCustomer = async (id: string) => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      setCustomers(customers.filter(customer => customer.id !== id));
+      await deleteCustomer(id);
+      await loadCustomers();
       
       toast({
         title: 'Customer deleted',
@@ -265,7 +267,7 @@ export default function CustomersPage() {
               <Input
                 placeholder="Search customers..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
               />
             </div>
@@ -274,7 +276,7 @@ export default function CustomersPage() {
         <CardContent>
           {loading ? (
             <Loader text="Loading customers..." />
-          ) : filteredCustomers.length === 0 ? (
+          ) : customers.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">No customers found.</p>
             </div>
@@ -292,7 +294,7 @@ export default function CustomersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCustomers.map((customer) => (
+                  {customers.map((customer) => (
                     <TableRow key={customer.id}>
                       <TableCell className="font-medium">{customer.name}</TableCell>
                       <TableCell>

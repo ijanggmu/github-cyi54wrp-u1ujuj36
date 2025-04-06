@@ -11,16 +11,22 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/lib/auth-store';
+import { useAuth } from '@/hooks/useAuth';
 import { NotificationDropdown } from '@/components/notification-dropdown';
+import { toast } from 'sonner';
 
 export function Navbar() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+      router.push('/login');
+    } catch (error) {
+      toast.error('Failed to log out. Please try again.');
+    }
   };
 
   return (
@@ -36,7 +42,7 @@ export function Navbar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{user?.name}</DropdownMenuLabel>
+              <DropdownMenuLabel>{user?.email}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push('/profile')}>
                 Profile

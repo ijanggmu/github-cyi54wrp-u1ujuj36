@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,65 +37,55 @@ import {
   Eye,
   Trash2,
   Loader2,
-  Building2,
 } from 'lucide-react';
 import { Loader } from "@/components/ui/loader";
-
-interface Supplier {
-  id: string;
-  name: string;
-  company: string;
-  phone: string;
-  email?: string;
-  address?: string;
-  contactPerson: string;
-  status: 'active' | 'inactive';
-  lastOrder: string;
-  totalOrders: number;
-}
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '@/lib/db/suppliers';
+import { Supplier } from '@/lib/db/suppliers';
 
 export default function SuppliersPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [suppliers, setSuppliers] = useState<Supplier[]>([
-    {
-      id: '1',
-      name: 'John Smith',
-      company: 'PharmaCorp Inc.',
-      phone: '+1 234 567 8900',
-      email: 'john@pharmacorp.com',
-      address: '123 Business Ave, City',
-      contactPerson: 'John Smith',
-      status: 'active',
-      lastOrder: '2024-03-15',
-      totalOrders: 25,
-    },
-    // Add more sample suppliers...
-  ]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
-  const [newSupplier, setNewSupplier] = useState<Omit<Supplier, 'id' | 'lastOrder' | 'totalOrders'>>({
+  const [newSupplier, setNewSupplier] = useState({
     name: '',
-    company: '',
-    phone: '',
     email: '',
+    phone: '',
     address: '',
-    contactPerson: '',
-      status: 'active',
   });
+
+  useEffect(() => {
+    loadSuppliers();
+  }, []);
+
+  const loadSuppliers = async () => {
+    setLoading(true);
+    try {
+      const data = await getSuppliers();
+      setSuppliers(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load suppliers. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredSuppliers = suppliers.filter((supplier) =>
     supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    supplier.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
     supplier.phone.includes(searchQuery) ||
     supplier.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleAddSupplier = async () => {
-    if (!newSupplier.name || !newSupplier.company || !newSupplier.phone) {
+    if (!newSupplier.name || !newSupplier.phone) {
       toast({
         title: 'Missing information',
         description: 'Please fill in all required fields.',
@@ -106,27 +96,10 @@ export default function SuppliersPage() {
 
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      const supplier: Supplier = {
-        id: `${suppliers.length + 1}`,
-        ...newSupplier,
-        lastOrder: new Date().toISOString().split('T')[0],
-        totalOrders: 0,
-      };
-      
-      setSuppliers([...suppliers, supplier]);
+      await createSupplier(newSupplier);
+      await loadSuppliers();
       setShowAddDialog(false);
-      setNewSupplier({
-        name: '',
-        company: '',
-        phone: '',
-        email: '',
-        address: '',
-        contactPerson: '',
-        status: 'active',
-      });
+      setNewSupplier({ name: '', email: '', phone: '', address: '' });
       
       toast({
         title: 'Supplier added',
@@ -148,26 +121,11 @@ export default function SuppliersPage() {
 
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      setSuppliers(suppliers.map(supplier =>
-        supplier.id === selectedSupplier.id
-          ? { ...supplier, ...newSupplier }
-          : supplier
-      ));
-      
+      await updateSupplier(selectedSupplier.id, newSupplier);
+      await loadSuppliers();
       setShowEditDialog(false);
       setSelectedSupplier(null);
-      setNewSupplier({
-        name: '',
-        company: '',
-        phone: '',
-        email: '',
-        address: '',
-        contactPerson: '',
-        status: 'active',
-      });
+      setNewSupplier({ name: '', email: '', phone: '', address: '' });
       
       toast({
         title: 'Supplier updated',
@@ -187,10 +145,8 @@ export default function SuppliersPage() {
   const handleDeleteSupplier = async (id: string) => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      setSuppliers(suppliers.filter(supplier => supplier.id !== id));
+      await deleteSupplier(id);
+      await loadSuppliers();
       
       toast({
         title: 'Supplier deleted',
@@ -229,22 +185,12 @@ export default function SuppliersPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Contact Name</Label>
+                <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
                   value={newSupplier.name}
                   onChange={(e) =>
                     setNewSupplier({ ...newSupplier, name: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company">Company Name</Label>
-                <Input
-                  id="company"
-                  value={newSupplier.company}
-                  onChange={(e) =>
-                    setNewSupplier({ ...newSupplier, company: e.target.value })
                   }
                 />
               </div>
@@ -278,33 +224,6 @@ export default function SuppliersPage() {
                     setNewSupplier({ ...newSupplier, address: e.target.value })
                   }
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactPerson">Contact Person</Label>
-                <Input
-                  id="contactPerson"
-                  value={newSupplier.contactPerson}
-                  onChange={(e) =>
-                    setNewSupplier({ ...newSupplier, contactPerson: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={newSupplier.status}
-                  onValueChange={(value: 'active' | 'inactive') =>
-                    setNewSupplier({ ...newSupplier, status: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
               <Button
                 className="w-full"
@@ -352,11 +271,8 @@ export default function SuppliersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Company</TableHead>
                     <TableHead>Contact</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last Order</TableHead>
-                    <TableHead>Total Orders</TableHead>
+                    <TableHead>Address</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -364,7 +280,6 @@ export default function SuppliersPage() {
                   {filteredSuppliers.map((supplier) => (
                     <TableRow key={supplier.id}>
                       <TableCell className="font-medium">{supplier.name}</TableCell>
-                      <TableCell>{supplier.company}</TableCell>
                       <TableCell>
                         <div>
                           <p>{supplier.phone}</p>
@@ -375,15 +290,7 @@ export default function SuppliersPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={supplier.status === 'active' ? 'default' : 'secondary'}
-                        >
-                          {supplier.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{supplier.lastOrder}</TableCell>
-                      <TableCell>{supplier.totalOrders}</TableCell>
+                      <TableCell>{supplier.address}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
@@ -407,10 +314,6 @@ export default function SuppliersPage() {
                                     <p>{selectedSupplier.name}</p>
                                   </div>
                                   <div>
-                                    <Label>Company</Label>
-                                    <p>{selectedSupplier.company}</p>
-                                  </div>
-                                  <div>
                                     <Label>Phone</Label>
                                     <p>{selectedSupplier.phone}</p>
                                   </div>
@@ -426,26 +329,6 @@ export default function SuppliersPage() {
                                       <p>{selectedSupplier.address}</p>
                                     </div>
                                   )}
-                                  <div>
-                                    <Label>Contact Person</Label>
-                                    <p>{selectedSupplier.contactPerson}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Status</Label>
-                                    <Badge
-                                      variant={selectedSupplier.status === 'active' ? 'default' : 'secondary'}
-                                    >
-                                      {selectedSupplier.status}
-                                    </Badge>
-                                  </div>
-                                  <div>
-                                    <Label>Last Order</Label>
-                                    <p>{selectedSupplier.lastOrder}</p>
-                                  </div>
-                                  <div>
-                                    <Label>Total Orders</Label>
-                                    <p>{selectedSupplier.totalOrders}</p>
-                                  </div>
                                 </div>
                               )}
                             </DialogContent>
@@ -460,12 +343,9 @@ export default function SuppliersPage() {
                                   setSelectedSupplier(supplier);
                                   setNewSupplier({
                                     name: supplier.name,
-                                    company: supplier.company,
                                     phone: supplier.phone,
                                     email: supplier.email || '',
                                     address: supplier.address || '',
-                                    contactPerson: supplier.contactPerson,
-                                    status: supplier.status,
                                   });
                                 }}
                               >
@@ -478,7 +358,7 @@ export default function SuppliersPage() {
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="space-y-2">
-                                  <Label htmlFor="edit-name">Contact Name</Label>
+                                  <Label htmlFor="edit-name">Name</Label>
                                   <Input
                                     id="edit-name"
                                     value={newSupplier.name}
@@ -486,19 +366,6 @@ export default function SuppliersPage() {
                                       setNewSupplier({
                                         ...newSupplier,
                                         name: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-company">Company Name</Label>
-                                  <Input
-                                    id="edit-company"
-                                    value={newSupplier.company}
-                                    onChange={(e) =>
-                                      setNewSupplier({
-                                        ...newSupplier,
-                                        company: e.target.value,
                                       })
                                     }
                                   />
@@ -542,36 +409,6 @@ export default function SuppliersPage() {
                                       })
                                     }
                                   />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-contactPerson">Contact Person</Label>
-                                  <Input
-                                    id="edit-contactPerson"
-                                    value={newSupplier.contactPerson}
-                                    onChange={(e) =>
-                                      setNewSupplier({
-                                        ...newSupplier,
-                                        contactPerson: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-status">Status</Label>
-                                  <Select
-                                    value={newSupplier.status}
-                                    onValueChange={(value: 'active' | 'inactive') =>
-                                      setNewSupplier({ ...newSupplier, status: value })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="active">Active</SelectItem>
-                                      <SelectItem value="inactive">Inactive</SelectItem>
-                                    </SelectContent>
-                                  </Select>
                                 </div>
                                 <Button
                                   className="w-full"
