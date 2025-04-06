@@ -1,11 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  ColumnDef,
+  flexRender,
+} from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -40,10 +48,33 @@ import {
   AlertTriangle,
   Package,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  History,
 } from 'lucide-react';
 import { Loader } from "@/components/ui/loader";
-import { getInventory, updateStock, updateReorderLevel, getLowStockItems, getStockHistory, addStockHistory } from '@/lib/db/inventory';
-import { InventoryItem } from '@/lib/db/inventory';
+import { 
+  getInventory, 
+  updateStock, 
+  updateReorderLevel, 
+  getLowStockProducts, 
+  getStockHistory, 
+  addStockHistory,
+  InventoryItem,
+  Product
+} from '@/lib/db/inventory';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Category {
   id: string;
@@ -86,6 +117,8 @@ export default function InventoryPage() {
     quantity: 0,
     reorder_level: 0,
   });
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   
   // Sample data - replace with API calls
   const [categories, setCategories] = useState<Category[]>([
@@ -142,6 +175,91 @@ export default function InventoryPage() {
     company: '',
   });
 
+  const columns: ColumnDef<InventoryItem>[] = [
+    {
+      accessorKey: 'products.name',
+      header: 'Product Name',
+    },
+    {
+      accessorKey: 'products.sku',
+      header: 'SKU',
+    },
+    {
+      accessorKey: 'products.category',
+      header: 'Category',
+    },
+    {
+      accessorKey: 'quantity',
+      header: 'Quantity',
+    },
+    {
+      accessorKey: 'reorder_level',
+      header: 'Reorder Level',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const quantity = row.original.quantity;
+        const reorderLevel = row.original.reorder_level;
+        const status = getStockStatus(quantity, reorderLevel);
+        return (
+          <Badge variant={status.variant as "default" | "destructive" | "secondary" | "outline"}>
+            {status.text}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setSelectedItem(row.original);
+              setShowUpdateDialog(true);
+            }}
+          >
+            <Edit2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setSelectedItem(row.original);
+              setShowHistoryDialog(true);
+            }}
+          >
+            <History className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDeleteClick(row.original)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const table = useReactTable({
+    data: inventory,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      globalFilter: searchQuery,
+    },
+    onGlobalFilterChange: setSearchQuery,
+  });
+
   useEffect(() => {
     loadInventory();
     loadLowStockItems();
@@ -165,8 +283,10 @@ export default function InventoryPage() {
 
   const loadLowStockItems = async () => {
     try {
-      const data = await getLowStockItems();
-      setLowStockItems(data);
+      const { data } = await getLowStockProducts();
+      if (data) {
+        setLowStockItems(data);
+      }
     } catch (error) {
       toast({
         title: 'Error',
@@ -189,31 +309,23 @@ export default function InventoryPage() {
     }
   };
 
-  const filteredInventory = inventory.filter((item) =>
-    item.products?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.products?.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.products?.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const handleUpdateStock = async () => {
     if (!selectedItem) return;
-
     setLoading(true);
     try {
       await updateStock(selectedItem.id, updateData.quantity);
       await addStockHistory({
         product_id: selectedItem.product_id,
         quantity: updateData.quantity,
-        type: updateData.quantity > selectedItem.quantity ? 'in' : 'out',
-        notes: `Stock updated from ${selectedItem.quantity} to ${updateData.quantity}`,
+        type: updateData.quantity > 0 ? 'in' : 'out',
       });
-      await loadInventory();
-      setShowUpdateDialog(false);
-      
       toast({
-        title: 'Stock updated',
-        description: 'Inventory stock has been updated successfully.',
+        title: 'Success',
+        description: 'Stock updated successfully.',
       });
+      setShowUpdateDialog(false);
+      loadInventory();
+      loadLowStockItems();
     } catch (error) {
       toast({
         title: 'Error',
@@ -229,12 +341,12 @@ export default function InventoryPage() {
     setLoading(true);
     try {
       await updateReorderLevel(id, reorder_level);
-      await loadInventory();
-      
       toast({
-        title: 'Reorder level updated',
-        description: 'Reorder level has been updated successfully.',
+        title: 'Success',
+        description: 'Reorder level updated successfully.',
       });
+      loadInventory();
+      loadLowStockItems();
     } catch (error) {
       toast({
         title: 'Error',
@@ -248,11 +360,11 @@ export default function InventoryPage() {
 
   const getStockStatus = (quantity: number, reorder_level: number) => {
     if (quantity <= 0) {
-      return { text: 'Out of Stock', color: 'text-red-500' };
+      return { text: 'Out of Stock', variant: 'destructive' as const };
     } else if (quantity <= reorder_level) {
-      return { text: 'Low Stock', color: 'text-yellow-500' };
+      return { text: 'Low Stock', variant: 'secondary' as const };
     } else {
-      return { text: 'In Stock', color: 'text-green-500' };
+      return { text: 'In Stock', variant: 'default' as const };
     }
   };
 
@@ -454,231 +566,79 @@ export default function InventoryPage() {
   const lowStockMedicines = medicines.filter(medicine => medicine.stock <= medicine.minStock);
   const expiredMedicines = medicines.filter(medicine => new Date(medicine.expiryDate) < new Date());
 
+  const handleDeleteClick = (item: InventoryItem) => {
+    setItemToDelete(item);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+    
+    setLoading(true);
+    try {
+      await deleteProduct(itemToDelete.id);
+      await loadInventory();
+      toast({
+        title: 'Success',
+        description: 'Product deleted successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete product. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+      setShowDeleteDialog(false);
+      setItemToDelete(null);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Inventory</h1>
-          <p className="text-muted-foreground">
-            Manage your pharmacy inventory
-          </p>
-        </div>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Medicine
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add New Medicine</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={newMedicine.name}
-                  onChange={(e) =>
-                    setNewMedicine({ ...newMedicine, name: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={newMedicine.category}
-                    onValueChange={(value) =>
-                      setNewMedicine({ ...newMedicine, category: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.name}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowCategoryDialog(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="supplier">Supplier</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={newMedicine.supplier}
-                    onValueChange={(value) =>
-                      setNewMedicine({ ...newMedicine, supplier: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select supplier" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.company}>
-                          {supplier.company}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowSupplierDialog(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="costPrice">Cost Price</Label>
-                <Input
-                  id="costPrice"
-                  type="number"
-                  step="0.01"
-                  value={newMedicine.costPrice}
-                  onChange={(e) =>
-                    setNewMedicine({
-                      ...newMedicine,
-                      costPrice: parseFloat(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sellingPrice">Selling Price</Label>
-                <Input
-                  id="sellingPrice"
-                  type="number"
-                  step="0.01"
-                  value={newMedicine.sellingPrice}
-                  onChange={(e) =>
-                    setNewMedicine({
-                      ...newMedicine,
-                      sellingPrice: parseFloat(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stock">Current Stock</Label>
-                <Input
-                  id="stock"
-                  type="number"
-                  value={newMedicine.stock}
-                  onChange={(e) =>
-                    setNewMedicine({
-                      ...newMedicine,
-                      stock: parseInt(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="minStock">Minimum Stock</Label>
-                <Input
-                  id="minStock"
-                  type="number"
-                  value={newMedicine.minStock}
-                  onChange={(e) =>
-                    setNewMedicine({
-                      ...newMedicine,
-                      minStock: parseInt(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="expiryDate">Expiry Date</Label>
-                <Input
-                  id="expiryDate"
-                  type="date"
-                  value={newMedicine.expiryDate}
-                  onChange={(e) =>
-                    setNewMedicine({ ...newMedicine, expiryDate: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label htmlFor="description">Description (Optional)</Label>
-                <Input
-                  id="description"
-                  value={newMedicine.description}
-                  onChange={(e) =>
-                    setNewMedicine({ ...newMedicine, description: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-            <Button
-              className="w-full mt-4"
-              onClick={handleAddMedicine}
-              disabled={loading}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{inventory.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{lowStockItems.length}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle>Inventory</CardTitle>
+          <div className="flex items-center space-x-2">
+            <Select
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                'Add Medicine'
-              )}
-            </Button>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Alerts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {lowStockItems.length > 0 && (
-          <Card className="bg-yellow-50">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                <div>
-                  <h3 className="font-semibold text-yellow-800">Low Stock Alert</h3>
-                  <p className="text-sm text-yellow-700">
-                    {lowStockItems.length} medicines are running low on stock
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        {expiredMedicines.length > 0 && (
-          <Card className="bg-red-50">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-                <div>
-                  <h3 className="font-semibold text-red-800">Expired Medicines</h3>
-                  <p className="text-sm text-red-700">
-                    {expiredMedicines.length} medicines have expired
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1">
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {/* Add category options here */}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center py-4">
+            <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search inventory..."
@@ -688,269 +648,228 @@ export default function InventoryPage() {
               />
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Loader text="Loading inventory..." />
-          ) : filteredInventory.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">No inventory items found.</p>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Current Stock</TableHead>
-                    <TableHead>Reorder Level</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                      </TableHead>
+                    ))}
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInventory.map((item) => {
-                    const status = getStockStatus(item.quantity, item.reorder_level);
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.products?.name}</TableCell>
-                        <TableCell>{item.products?.sku}</TableCell>
-                        <TableCell>{item.products?.category}</TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            value={item.reorder_level}
-                            onChange={(e) =>
-                              handleUpdateReorderLevel(item.id, parseInt(e.target.value))
-                            }
-                            className="w-20"
-                          />
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && 'selected'}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
                         </TableCell>
-                        <TableCell>
-                          <span className={status.color}>{status.text}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setSelectedItem(item);
-                                    setUpdateData({
-                                      quantity: item.quantity,
-                                      reorder_level: item.reorder_level,
-                                    });
-                                  }}
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Update Stock</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label>Product</Label>
-                                    <p className="font-medium">{item.products?.name}</p>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="quantity">New Quantity</Label>
-                                    <Input
-                                      id="quantity"
-                                      type="number"
-                                      value={updateData.quantity}
-                                      onChange={(e) =>
-                                        setUpdateData({
-                                          ...updateData,
-                                          quantity: parseInt(e.target.value),
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <Button
-                                    className="w-full"
-                                    onClick={handleUpdateStock}
-                                    disabled={loading}
-                                  >
-                                    {loading ? (
-                                      <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Updating...
-                                      </>
-                                    ) : (
-                                      'Update Stock'
-                                    )}
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-
-                            <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setSelectedItem(item);
-                                    loadStockHistory(item.product_id);
-                                  }}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Stock History</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label>Product</Label>
-                                    <p className="font-medium">{item.products?.name}</p>
-                                  </div>
-                                  <div className="rounded-md border">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Type</TableHead>
-                                          <TableHead>Quantity</TableHead>
-                                          <TableHead>Notes</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {stockHistory.map((history) => (
-                                          <TableRow key={history.id}>
-                                            <TableCell>
-                                              {new Date(history.created_at).toLocaleDateString()}
-                                            </TableCell>
-                                            <TableCell>
-                                              <span
-                                                className={
-                                                  history.type === 'in'
-                                                    ? 'text-green-500'
-                                                    : 'text-red-500'
-                                                }
-                                              >
-                                                {history.type === 'in' ? 'In' : 'Out'}
-                                              </span>
-                                            </TableCell>
-                                            <TableCell>{history.quantity}</TableCell>
-                                            <TableCell>{history.notes}</TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-24 text-center"
+                    >
+                      No results.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex items-center justify-end space-x-2 py-4">
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.setPageIndex(0)}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                disabled={!table.getCanNextPage()}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
             </div>
-          )}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-muted-foreground">
+                Page {table.getState().pagination.pageIndex + 1} of{' '}
+                {table.getPageCount()}
+              </span>
+              <select
+                value={table.getState().pagination.pageSize}
+                onChange={(e) => {
+                  table.setPageSize(Number(e.target.value));
+                }}
+                className="h-8 w-[70px] rounded-md border border-input bg-background px-2 py-1 text-sm"
+              >
+                {[5, 10, 20, 30, 40, 50].map((pageSize) => (
+                  <option key={pageSize} value={pageSize}>
+                    {pageSize}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Category Dialog */}
-      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add New Category</DialogTitle>
+            <DialogTitle>Update Stock</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="category-name">Name</Label>
-              <Input
-                id="category-name"
-                value={newCategory.name}
-                onChange={(e) =>
-                  setNewCategory({ ...newCategory, name: e.target.value })
-                }
-              />
+          {selectedItem && (
+            <div className="space-y-4">
+              <div>
+                <Label>Product</Label>
+                <p>{selectedItem.products?.name}</p>
+              </div>
+              <div>
+                <Label>Current Stock</Label>
+                <p>{selectedItem.quantity}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity Change</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={updateData.quantity}
+                  onChange={(e) =>
+                    setUpdateData({ ...updateData, quantity: Number(e.target.value) })
+                  }
+                />
+                <p className="text-sm text-muted-foreground">
+                  Enter positive number to add stock, negative to remove
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reorder_level">Reorder Level</Label>
+                <Input
+                  id="reorder_level"
+                  type="number"
+                  value={updateData.reorder_level}
+                  onChange={(e) =>
+                    setUpdateData({ ...updateData, reorder_level: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleUpdateStock}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Stock'
+                )}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="category-description">Description (Optional)</Label>
-              <Input
-                id="category-description"
-                value={newCategory.description}
-                onChange={(e) =>
-                  setNewCategory({ ...newCategory, description: e.target.value })
-                }
-              />
-            </div>
-            <Button
-              className="w-full"
-              onClick={handleAddCategory}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                'Add Category'
-              )}
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Supplier Dialog */}
-      <Dialog open={showSupplierDialog} onOpenChange={setShowSupplierDialog}>
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add New Supplier</DialogTitle>
+            <DialogTitle>Stock History</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="supplier-name">Contact Name</Label>
-              <Input
-                id="supplier-name"
-                value={newSupplier.name}
-                onChange={(e) =>
-                  setNewSupplier({ ...newSupplier, name: e.target.value })
-                }
-              />
+          {selectedItem && (
+            <div className="space-y-4">
+              <div>
+                <Label>Product</Label>
+                <p>{selectedItem.products?.name}</p>
+              </div>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Notes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stockHistory.map((history) => (
+                      <TableRow key={history.id}>
+                        <TableCell>{new Date(history.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Badge variant={history.type === 'in' ? 'default' : 'destructive'}>
+                            {history.type === 'in' ? 'In' : 'Out'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{history.quantity}</TableCell>
+                        <TableCell>{history.notes}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="supplier-company">Company Name</Label>
-              <Input
-                id="supplier-company"
-                value={newSupplier.company}
-                onChange={(e) =>
-                  setNewSupplier({ ...newSupplier, company: e.target.value })
-                }
-              />
-            </div>
-            <Button
-              className="w-full"
-              onClick={handleAddSupplier}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                'Add Supplier'
-              )}
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the product
+              {itemToDelete ? ` "${itemToDelete.name}"` : ''} and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

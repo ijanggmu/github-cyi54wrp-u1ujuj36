@@ -213,17 +213,8 @@ export interface InventoryItem {
 export async function getInventory() {
   const supabase = createClient();
   const { data, error } = await supabase
-    .from('inventory')
-    .select(`
-      *,
-      products (
-        id,
-        name,
-        sku,
-        price,
-        category
-      )
-    `)
+    .from('products')
+    .select('*', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (error) {

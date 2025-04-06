@@ -89,7 +89,7 @@ export default function OrdersPage() {
     setLoading(true);
     try {
       const data = await getOrders();
-      setOrders(data);
+      setOrders(data.data);
     } catch (error) {
       toast({
         title: 'Error',
@@ -104,7 +104,7 @@ export default function OrdersPage() {
   const loadProducts = async () => {
     try {
       const data = await getProducts();
-      setProducts(data);
+      setProducts(data.data);
     } catch (error) {
       toast({
         title: 'Error',
@@ -117,7 +117,7 @@ export default function OrdersPage() {
   const loadCustomers = async () => {
     try {
       const data = await getCustomers();
-      setCustomers(data);
+      setCustomers(data.data);
     } catch (error) {
       toast({
         title: 'Error',
