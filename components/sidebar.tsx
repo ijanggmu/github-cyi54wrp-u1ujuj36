@@ -65,14 +65,12 @@ const routes = [
     icon: Shield,
     href: '/roles',
     color: 'text-red-500',
-    adminOnly: true,
   },
   {
     label: 'Users',
     icon: UserCog,
     href: '/users',
     color: 'text-purple-500',
-    adminOnly: true,
   },
   {
     label: 'Settings',
@@ -207,6 +205,23 @@ export default function Sidebar() {
               {!isCollapsed && <span className="ml-3">Toggle theme</span>}
             </Button>
           </div>
+
+          {/* User Profile */}
+          {user && (
+            <div className={cn('px-2 mt-6 border-t pt-4', isCollapsed && 'flex flex-col items-center')}>
+              <div className={cn('flex items-center gap-2', isCollapsed && 'flex-col')}>
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-sm font-medium">{user.name.charAt(0)}</span>
+                </div>
+                {!isCollapsed && (
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{user.name}</span>
+                    <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

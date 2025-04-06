@@ -65,7 +65,8 @@ export default function CustomersPage() {
     setLoading(true);
     try {
       const data = await getCustomers();
-      setCustomers(data);
+      debugger;
+      setCustomers(data.data);
     } catch (error) {
       toast({
         title: 'Error',
@@ -87,7 +88,7 @@ export default function CustomersPage() {
     setLoading(true);
     try {
       const data = await searchCustomers(query);
-      setCustomers(data);
+      setCustomers(data.data);
     } catch (error) {
       toast({
         title: 'Error',
@@ -309,7 +310,7 @@ export default function CustomersPage() {
                       </TableCell>
                       <TableCell>{customer.createdAt}</TableCell>
                       <TableCell>{customer.lastVisit}</TableCell>
-                      <TableCell>${customer.totalSpent.toFixed(2)}</TableCell>
+                      <TableCell>${customer.totalSpent?.toFixed(2)??'0.00'??'0.00'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
@@ -358,7 +359,7 @@ export default function CustomersPage() {
                                   </div>
                                   <div>
                                     <Label>Total Spent</Label>
-                                    <p>${selectedCustomer.totalSpent.toFixed(2)}</p>
+                                    <p>${selectedCustomer.totalSpent?.toFixed(2)??'0.00'}</p>
                                   </div>
                                 </div>
                               )}

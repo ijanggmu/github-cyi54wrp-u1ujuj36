@@ -244,7 +244,7 @@ export default function SalesPage() {
                           </Badge>
                         </div>
                         <div className="flex justify-between items-center">
-                          <p className="font-medium">${product.price.toFixed(2)}</p>
+                          <p className="font-medium">${product.price?.toFixed(2)??'0.00'}</p>
                           <Button
                             size="sm"
                             onClick={() => handleAddToCart(product)}
@@ -285,7 +285,7 @@ export default function SalesPage() {
                         <div className="space-y-1">
                           <p className="font-medium">{item.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            ${item.price.toFixed(2)} x {item.quantity}
+                            ${item.price?.toFixed(2)??'0.00'} x {item.quantity}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -316,7 +316,7 @@ export default function SalesPage() {
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Total:</span>
                     <span className="text-lg font-bold">
-                      ${cartTotal.toFixed(2)}
+                      ${cartTotal?.toFixed(2)??'0.00'}
                     </span>
                   </div>
                   <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
@@ -374,7 +374,7 @@ export default function SalesPage() {
                         <div className="flex justify-between items-center">
                           <span className="font-medium">Total Amount:</span>
                           <span className="text-lg font-bold">
-                            ${cartTotal.toFixed(2)}
+                            ${cartTotal?.toFixed(2)??'0.00'}
                           </span>
                         </div>
                         <Button
@@ -435,7 +435,7 @@ export default function SalesPage() {
                       className="flex items-center justify-between p-2 border rounded-lg"
                     >
                       <div className="space-y-1">
-                        <p className="font-medium">${sale.amount.toFixed(2)}</p>
+                        <p className="font-medium">${sale.amount?.toFixed(2)??'0.00'}</p>
                         <p className="text-sm text-muted-foreground">
                           {sale.items} items
                         </p>

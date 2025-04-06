@@ -462,7 +462,7 @@ export default function OrdersPage() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell>${order.total_amount.toFixed(2)}</TableCell>
+                      <TableCell>${order.total_amount?.toFixed(2)??'0.00'}</TableCell>
                       <TableCell>
                         {new Date(order.created_at).toLocaleDateString()}
                       </TableCell>
@@ -502,7 +502,7 @@ export default function OrdersPage() {
                                   </div>
                                   <div>
                                     <Label>Total Amount</Label>
-                                    <p>${selectedOrder.total_amount.toFixed(2)}</p>
+                                    <p>${selectedOrder.total_amount?.toFixed(2)??'0.00'}</p>
                                   </div>
                                   {selectedOrder.notes && (
                                     <div>
@@ -517,7 +517,7 @@ export default function OrdersPage() {
                                         <div key={item.id} className="flex justify-between">
                                           <span>{item.products?.name}</span>
                                           <span>
-                                            {item.quantity} x ${item.price.toFixed(2)}
+                                            {item.quantity} x ${item.price?.toFixed(2)??'0.00'}
                                           </span>
                                         </div>
                                       ))}

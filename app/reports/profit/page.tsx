@@ -153,7 +153,7 @@ export default function ProfitReportPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <h3 className="text-2xl font-bold">${totalRevenue.toFixed(2)}</h3>
+                <h3 className="text-2xl font-bold">${totalRevenue?.toFixed(2)??'0.00'}</h3>
               </div>
             </div>
           </CardContent>
@@ -167,7 +167,7 @@ export default function ProfitReportPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Cost</p>
-                <h3 className="text-2xl font-bold">${totalCost.toFixed(2)}</h3>
+                <h3 className="text-2xl font-bold">${totalCost?.toFixed(2)??'0.00'}</h3>
               </div>
             </div>
           </CardContent>
@@ -181,7 +181,7 @@ export default function ProfitReportPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Profit</p>
-                <h3 className="text-2xl font-bold">${totalProfit.toFixed(2)}</h3>
+                <h3 className="text-2xl font-bold">${totalProfit?.toFixed(2)??'0.00'}</h3>
               </div>
             </div>
           </CardContent>
@@ -292,14 +292,14 @@ export default function ProfitReportPage() {
                       <TableRow key={medicine.id}>
                         <TableCell className="font-medium">{medicine.name}</TableCell>
                         <TableCell>{medicine.category}</TableCell>
-                        <TableCell>${medicine.costPrice.toFixed(2)}</TableCell>
-                        <TableCell>${medicine.sellingPrice.toFixed(2)}</TableCell>
+                        <TableCell>${medicine.costPrice?.toFixed(2)??'0.00'}</TableCell>
+                        <TableCell>${medicine.sellingPrice?.toFixed(2)??'0.00'}</TableCell>
                         <TableCell>{medicine.totalSold}</TableCell>
-                        <TableCell>${revenue.toFixed(2)}</TableCell>
-                        <TableCell>${cost.toFixed(2)}</TableCell>
+                        <TableCell>${revenue?.toFixed(2)??'0.00'}</TableCell>
+                        <TableCell>${cost?.toFixed(2)??'0.00'}</TableCell>
                         <TableCell>
                           <span className={profit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            ${profit.toFixed(2)}
+                            ${profit?.toFixed(2)??'0.00'}
                           </span>
                         </TableCell>
                         <TableCell>

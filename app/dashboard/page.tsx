@@ -116,7 +116,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${metrics.totalRevenue.toFixed(2)}
+              ${metrics.totalRevenue?.toFixed(2)??'0.00'}
             </div>
             <p className="text-xs text-muted-foreground">
               Revenue from completed orders
@@ -146,7 +146,7 @@ export default function DashboardPage() {
                   {metrics.recentOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>{order.customer_name}</TableCell>
-                      <TableCell>${order.total_amount.toFixed(2)}</TableCell>
+                      <TableCell>${order.total_amount?.toFixed(2)??'0.00'}</TableCell>
                       <TableCell>
                         <span
                           className={`px-2 py-1 rounded-full text-xs ${
@@ -188,7 +188,7 @@ export default function DashboardPage() {
                     <TableRow key={product.id}>
                       <TableCell>{product.name}</TableCell>
                       <TableCell>{product.quantity_sold}</TableCell>
-                      <TableCell>${product.revenue.toFixed(2)}</TableCell>
+                      <TableCell>${product.revenue?.toFixed(2)??'0.00'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

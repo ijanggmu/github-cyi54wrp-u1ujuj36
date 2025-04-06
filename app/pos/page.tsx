@@ -440,7 +440,7 @@ export default function POSPage() {
                         </div>
                         <h3 className="font-medium text-sm mb-1">{product.name}</h3>
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-sm">${product.price.toFixed(2)}</span>
+                          <span className="font-medium text-sm">${product.price?.toFixed(2)??'0.00'}</span>
                           <span className="text-xs text-muted-foreground">
                             Stock: {product.stock}
                           </span>
@@ -515,12 +515,12 @@ export default function POSPage() {
                             <div>
                               <h4 className="font-medium text-sm">{item.name}</h4>
                               <p className="text-xs text-muted-foreground">
-                                ${item.price.toFixed(2)} each
+                                ${item.price?.toFixed(2)??'0.00'} each
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            ${item.price.toFixed(2)}
+                            ${item.price?.toFixed(2)??'0.00'}
                           </div>
                           <div className="flex items-center justify-end gap-2">
                             <Button
@@ -565,10 +565,10 @@ export default function POSPage() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-medium">${item.total.toFixed(2)}</div>
+                            <div className="font-medium">${item.total?.toFixed(2)??'0.00'}</div>
                             {item.discount > 0 && (
                               <div className="text-xs text-destructive">
-                                -${((item.price * item.quantity) - item.total).toFixed(2)}
+                                -${((item.price * item.quantity) - item.total)?.toFixed(2)??'0.00'}
                               </div>
                             )}
                           </div>
@@ -581,7 +581,7 @@ export default function POSPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span>${cartTotal.toFixed(2)}</span>
+                      <span>${cartTotal?.toFixed(2)??'0.00'}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
@@ -609,14 +609,14 @@ export default function POSPage() {
                         </div>
                       </div>
                       <span className="text-destructive">
-                        -${discountAmount.toFixed(2)}
+                        -${discountAmount?.toFixed(2)??'0.00'}
                       </span>
                     </div>
                     <Separator />
                     <div className="flex justify-between items-center text-sm font-medium">
                       <span>Total Amount:</span>
                       <span className="text-2xl font-bold text-primary">
-                        ${finalTotal.toFixed(2)}
+                        ${finalTotal?.toFixed(2)??'0.00'}
                       </span>
                     </div>
                   </div>
@@ -633,7 +633,7 @@ export default function POSPage() {
                     ) : (
                       <>
                         <CreditCard className="h-5 w-5" />
-                        Pay ${finalTotal.toFixed(2)}
+                        Pay ${finalTotal?.toFixed(2)??'0.00'}
                       </>
                     )}
                   </Button>
@@ -842,7 +842,7 @@ export default function POSPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Amount</span>
-                <span className="font-medium">${finalTotal.toFixed(2)}</span>
+                <span className="font-medium">${finalTotal?.toFixed(2)??'0.00'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Customer</span>
@@ -908,7 +908,7 @@ export default function POSPage() {
                 </div>
                 <div className="text-right">
                   <p className="font-medium">
-                    ${sale.total_amount.toFixed(2)}
+                    ${sale.total_amount?.toFixed(2)??'0.00'}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {sale.payment_method}
@@ -943,7 +943,7 @@ export default function POSPage() {
                 </div>
                 <div className="flex justify-between font-bold">
                   <span>Total:</span>
-                  <span>${currentSale.total_amount.toFixed(2)}</span>
+                  <span>${currentSale.total_amount?.toFixed(2)??'0.00'}</span>
                 </div>
                 <Button
                   className="w-full"
